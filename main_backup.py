@@ -3,6 +3,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.app import App
+from kivy.uix.checkbox import CheckBox
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
@@ -21,13 +22,14 @@ def get_users():
 
 
 class User:
-    def __init__(self, username, full_name, id):
-        self.username = username
-        self.full_name = full_name
+    def __init__(self, short_name, first_name, last_name, id):
+        self.short_name = short_name
+        self.first_name = first_name
+        self.last_name = last_name
         self.id = int(id)
 
     def __str__(self):
-        return self.username
+        return f"{self.first_name}\n{self.last_name}"
 
     def __repr__(self):
         return self.__str__()
@@ -63,8 +65,8 @@ class NewUserLayout(GridLayout):
         self.inside.cols = 2
 
         self.inside.add_widget(Label(text="First Name: ", font_size=40))
-        self.name = TextInput(multiline=False, font_size=55)
-        self.inside.add_widget(self.name)
+        self.firstName = TextInput(multiline=False, font_size=55)
+        self.inside.add_widget(self.firstName)
 
         self.inside.add_widget(Label(text="Last Name: ", font_size=40))
         self.lastName = TextInput(multiline=False, font_size=55)
@@ -154,7 +156,6 @@ class MyMainApp(App):
 
         return v_layout
 
-
     def update_users_screen(self):
         self.users = get_users()
 
@@ -164,7 +165,7 @@ class MyMainApp(App):
             users_grid.append(self.users[i * h_len:(i + 1) * h_len])
 
         v_layout = BoxLayout(orientation="vertical")
-        self.status_field = TextInput(text=self.current_status, readonly=True, multiline=False, font_size=28,
+        self.status_field = TextInput(text=self.current_status, readonly=False, multiline=True, font_size=28,
                                       halign="center", allow_copy=False)
         v_layout.add_widget(self.status_field)
 
@@ -184,16 +185,36 @@ class MyMainApp(App):
         self.users_screen.add_widget(v_layout)
 
     def on_create_user(self):
-        name, surname = self.new_user_layout.name.text, self.new_user_layout.lastName.text
+        firstname, surname = self.new_user_layout.firstName.text, self.new_user_layout.lastName.text
 
-        if name and surname:
+        if firstname and surname:
             with open("users", "a") as users_file:
                 id = max([user.id for user in self.users]) + 1
-                new_user_entry = f"{name[0].upper()}{surname[0].upper()}__{name}_{surname}__{id:05}"
+                new_user_entry = f"{firstname[0].upper()}{surname[0].upper()}__{firstname}__{surname}__{id:05}"
                 users_file.write("\n" + new_user_entry)
 
         self.users_screen.clear_widgets()
         self.update_users_screen()
+
+    def settings_screen(self):
+        settings_screen = Screen(name="settings")
+
+        v_layout = BoxLayout(orientation="vertical")
+        row1 = GridLayout()
+        row1.cols = 2
+
+        row1.add_widget(Label(text='En. add user'))
+        self.en_add_user = CheckBox(active=True)
+        row1.add_widget(self.en_add_user)
+        v_layout.add_widget(row1)
+
+        go_back_btn = Button(text="Go back", font_size=55)
+        go_back_btn.bind(on_press=self.on_button_press)
+        v_layout.add_widget(go_back_btn)
+
+        settings_screen.add_widget(v_layout)
+
+        return settings_screen
 
     def select_user(self, selected_user_id):
         for user in self.users:
@@ -209,7 +230,7 @@ class MyMainApp(App):
                 now = datetime.now()
                 qty = self.qty_fields[item.category].text
                 entry = f"{now}__{qty}__{item.name}__{item.price}__{item_id}"
-                self.status_field.text = f"Added: {qty}x {item.name} to {user}"
+                self.status_field.text = f"Added: {qty}x {item.name} to\n {user.first_name} {user.last_name}"
                 break
 
         with open(f"Appdata/Marks/{user_id}", "a") as file:
@@ -233,14 +254,20 @@ class MyMainApp(App):
 
         button_text = instance.text
         if button_text == "Add user":
-            self.sm.transition.direction = "left"
-            self.sm.current = "new_user"
+            if self.status_field.text == "1234":
+                self.sm.transition.direction = "down"
+                self.sm.current = "settings"
+            elif self.en_add_user.active:
+                self.sm.transition.direction = "left"
+                self.sm.current = "new_user"
+
+
         elif button_text == "Submit":
             self.on_create_user()
             goto_main()
         elif button_text == "Go back":
             goto_main()
-        elif button_text in [user.username for user in self.users]:
+        elif button_text in [str(user) for user in self.users]:
             goto_categories()
             self.select_user(instance.ids["user_id"])
         elif button_text in self.categories:
@@ -264,6 +291,10 @@ class MyMainApp(App):
         self.new_user_layout.submit.bind(on_press=self.on_button_press)
         new_user_screen.add_widget(self.new_user_layout)
         self.sm.add_widget(new_user_screen)
+
+        # settings screen
+        settings_screen = self.settings_screen()
+        self.sm.add_widget(settings_screen)
 
         # categories
         category_screen = self.item_category_screen()
