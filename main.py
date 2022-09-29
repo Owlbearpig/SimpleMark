@@ -134,7 +134,6 @@ class MyMainApp(App):
 
         return v_layout
 
-
     def update_users_screen(self):
         self.users = get_users()
 
