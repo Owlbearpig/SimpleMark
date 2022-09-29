@@ -7,7 +7,33 @@ from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from datetime import datetime
+import sqlite3
 
+
+class SQLStorage:
+    def __init__(self):
+        self.con = sqlite3.connect("appdata.db")
+        self.cur = self.con.cursor()
+
+    def insert_into(self, table, values, cols, multi_insert=False):
+        parameters = ", ".join(["?"] * len(cols))
+
+        sql = f"INSERT INTO {table} {cols} VALUES ({parameters})"
+
+        if multi_insert:
+            self.cur.executemany(sql, values)
+        else:
+            self.cur.execute(sql, values)
+
+        self.con.commit()
+
+    def select_from(self):
+        self.cur.execute("SELECT * FROM users")
+
+        myresult = self.cur.fetchall()
+
+        for x in myresult:
+            print(x)
 
 def get_users():
     with open("users", "r") as users_file:

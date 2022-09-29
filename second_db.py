@@ -1,11 +1,17 @@
 import sqlite3
+from main import SQLStorage
 
-con = sqlite3.connect("appdata.db")
+new_sql = SQLStorage()
 
-cur = con.cursor()
 
-#cur.execute("CREATE TABLE users(username, user_id)")
 
-res = cur.execute("SELECT username FROM users")
+#cur.execute("CREATE TABLE users(username, user_id)") # only needs to be executed ones obviously
+"""# create users table
+cols = ("username", "user_id")
+with open("users", "r") as file:
+    for line in file.readlines():
+        values = line.split("__")
+        new_sql.insert_into("users", values, cols)
+"""
 
-print(res.fetchone())
+new_sql.select_from()
