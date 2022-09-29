@@ -1,0 +1,7 @@
+users (readonly): stored on dev1, read by main and dev2.
+
+items (readonly): stored on main can be read by dev1 and dev2. Settings button to fetch.
+
+purchases (readonly): stored on dev1 and dev2 (not synced, but timestamp) can be read by main.
+
+(extra: main process purchases and make stats that can be read from dev1 and dev2.)

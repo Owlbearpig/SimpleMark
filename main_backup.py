@@ -1,10 +1,8 @@
-from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.app import App
 from kivy.uix.checkbox import CheckBox
-from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
@@ -18,18 +16,18 @@ def get_users():
             new_user = User(*user.split("__"))
             users.append(new_user)
 
+    users.sort(key=lambda x: x.username)
+
     return users
 
 
 class User:
-    def __init__(self, short_name, first_name, last_name, id):
-        self.short_name = short_name
-        self.first_name = first_name
-        self.last_name = last_name
-        self.id = int(id)
+    def __init__(self, username, user_id):
+        self.username = username
+        self.user_id = int(user_id)
 
     def __str__(self):
-        return f"{self.first_name}\n{self.last_name}"
+        return f"{self.username}"
 
     def __repr__(self):
         return self.__str__()
@@ -64,13 +62,9 @@ class NewUserLayout(GridLayout):
         self.inside = GridLayout()
         self.inside.cols = 2
 
-        self.inside.add_widget(Label(text="First Name: ", font_size=40))
-        self.firstName = TextInput(multiline=False, font_size=55)
-        self.inside.add_widget(self.firstName)
-
-        self.inside.add_widget(Label(text="Last Name: ", font_size=40))
-        self.lastName = TextInput(multiline=False, font_size=55)
-        self.inside.add_widget(self.lastName)
+        self.inside.add_widget(Label(text="Username: ", font_size=40))
+        self.username_input = TextInput(multiline=False, font_size=55)
+        self.inside.add_widget(self.username_input)
 
         self.add_widget(self.inside)
         self.submit = Button(text="Submit", font_size=40)
@@ -85,9 +79,9 @@ class StoreLayout(GridLayout):
         super(StoreLayout, self).__init__(**kwargs)
 
 
-class MyMainApp(App):
+class HiMark(App):
     def __init__(self, **kwargs):
-        super(MyMainApp, self).__init__(**kwargs)
+        super(HiMark, self).__init__(**kwargs)
         self.selected_user = None
         self.qty_fields = {}
         self.current_status = ""
@@ -178,19 +172,20 @@ class MyMainApp(App):
             for user in row:
                 user_button = Button(text=str(user))
                 user_button.bind(on_press=self.on_button_press)
-                user_button.ids['user_id'] = user.id
+                user_button.ids['user_id'] = user.user_id
                 h_layout.add_widget(user_button)
             v_layout.add_widget(h_layout)
 
         self.users_screen.add_widget(v_layout)
 
     def on_create_user(self):
-        firstname, surname = self.new_user_layout.firstName.text, self.new_user_layout.lastName.text
+        username = self.new_user_layout.username_input.text
+        username.replace("__", " ")
 
-        if firstname and surname:
+        if username:
             with open("users", "a") as users_file:
-                id = max([user.id for user in self.users]) + 1
-                new_user_entry = f"{firstname[0].upper()}{surname[0].upper()}__{firstname}__{surname}__{id:05}"
+                user_id = max([user.user_id for user in self.users]) + 1
+                new_user_entry = f"{username}__{user_id:05}"
                 users_file.write("\n" + new_user_entry)
 
         self.users_screen.clear_widgets()
@@ -218,19 +213,19 @@ class MyMainApp(App):
 
     def select_user(self, selected_user_id):
         for user in self.users:
-            if user.id == selected_user_id:
+            if user.user_id == selected_user_id:
                 self.selected_user = user
                 break
 
     def buy_item(self, user, item_id):
-        user_id = user.id
+        user_id = user.user_id
         entry = ""
         for item in self.items:
             if item.item_id == item_id:
                 now = datetime.now()
                 qty = self.qty_fields[item.category].text
                 entry = f"{now}__{qty}__{item.name}__{item.price}__{item_id}"
-                self.status_field.text = f"Added: {qty}x {item.name} to\n {user.first_name} {user.last_name}"
+                self.status_field.text = f"Added {qty}x {item.name} to\n {user.username}"
                 break
 
         with open(f"Appdata/Marks/{user_id}", "a") as file:
@@ -260,7 +255,6 @@ class MyMainApp(App):
             elif self.en_add_user.active:
                 self.sm.transition.direction = "left"
                 self.sm.current = "new_user"
-
 
         elif button_text == "Submit":
             self.on_create_user()
@@ -311,4 +305,4 @@ class MyMainApp(App):
 
 
 if __name__ == "__main__":
-    MyMainApp().run()
+    HiMark().run()
