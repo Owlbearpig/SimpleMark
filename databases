@@ -5,7 +5,7 @@ read from db, use files as redundancy.
 
 users (readonly): stored on dev1, read by main and dev2.
 
-items (readonly): stored on main can be read by dev1 and dev2. Settings button to fetch.
+items (readonly): stored on main can be read by dev1 and dev2. Settings button to update.
 
 purchases (readonly): stored on dev1 and dev2 (not synced, but timestamp) can be read by main.
 
@@ -14,3 +14,5 @@ purchases (readonly): stored on dev1 and dev2 (not synced, but timestamp) can be
 
 Store user and purchases as simple files (like it is now) and same time add to tables in appdata.db
 appdata.db is then copied using TCP with checksum confirmation
+
+server only accept known ips (should be static anyways)

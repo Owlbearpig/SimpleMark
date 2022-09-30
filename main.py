@@ -10,7 +10,7 @@ from datetime import datetime
 import sqlite3
 
 
-class SQLStorage:
+class DBConnection:
     def __init__(self):
         self.con = sqlite3.connect("appdata.db")
         self.cur = self.con.cursor()
@@ -27,24 +27,11 @@ class SQLStorage:
 
         self.con.commit()
 
-    def select_from(self):
-        self.cur.execute("SELECT * FROM users")
+    def select_from(self, table):
+        self.cur.execute(f"SELECT * FROM {table}")
+        result = self.cur.fetchall()
 
-        myresult = self.cur.fetchall()
-
-        for x in myresult:
-            print(x)
-
-def get_users():
-    with open("users", "r") as users_file:
-        users = []
-        for user in users_file.readlines():
-            new_user = User(*user.split("__"))
-            users.append(new_user)
-
-    users.sort(key=lambda x: x.username)
-
-    return users
+        return result
 
 
 class User:
@@ -57,16 +44,6 @@ class User:
 
     def __repr__(self):
         return self.__str__()
-
-
-def get_items():
-    with open("store_items", "r") as items_file:
-        items = []
-        for item in items_file.readlines():
-            new_item = Item(*item.split("__"))
-            items.append(new_item)
-
-    return items
 
 
 class Item:
@@ -111,10 +88,32 @@ class HiMark(App):
         self.selected_user = None
         self.qty_fields = {}
         self.current_status = ""
+        self.db_con = DBConnection()
+
+    def get_users(self):
+        all_users = self.db_con.select_from("users")
+
+        users = []
+        for user in all_users:
+            new_user = User(*user)
+            users.append(new_user)
+
+        users.sort(key=lambda x: x.username)
+
+        return users
+
+    def get_items(self):
+        all_items = self.db_con.select_from("items")
+        items = []
+        for item in all_items:
+            new_item = Item(*item)
+            items.append(new_item)
+
+        return items
 
     def item_category_screen(self):
         category_screen = Screen(name="categories")
-        self.items = get_items()
+        self.items = self.get_items()
         self.categories = list(set([item.category for item in self.items]))
 
         h_layout = BoxLayout(orientation="vertical")
@@ -177,7 +176,7 @@ class HiMark(App):
         return v_layout
 
     def update_users_screen(self):
-        self.users = get_users()
+        self.users = self.get_users()
 
         h_len = 5
         users_grid = []
@@ -206,13 +205,10 @@ class HiMark(App):
 
     def on_create_user(self):
         username = self.new_user_layout.username_input.text
-        username.replace("__", " ")
 
         if username:
-            with open("users", "a") as users_file:
-                user_id = max([user.user_id for user in self.users]) + 1
-                new_user_entry = f"{username}__{user_id:05}"
-                users_file.write("\n" + new_user_entry)
+            user_id = str(max([user.user_id for user in self.users]) + 1)
+            self.db_con.insert_into("users", (username, user_id.zfill(5)), ("username", "user_id"))
 
         self.users_screen.clear_widgets()
         self.update_users_screen()
@@ -250,12 +246,20 @@ class HiMark(App):
             if item.item_id == item_id:
                 now = datetime.now()
                 qty = self.qty_fields[item.category].text
-                entry = f"{now}__{qty}__{item.name}__{item.price}__{item_id}"
-                self.status_field.text = f"Added {qty}x {item.name} to\n {user.username}"
-                break
 
-        with open(f"Appdata/Marks/{user_id}", "a") as file:
-            file.write(entry)
+                vals = (now, qty, item.name, item.price, item_id, user_id)
+                cols = ("time", "qty", "name", "price", "item_id", "user_id")
+                self.db_con.insert_into("marks", vals, cols)
+
+                self.status_field.text = f"Added {qty}x {item.name} to\n {user.username}"
+
+                entry = "__".join([now, qty, item.name, item.price, item_id, user_id])
+                break
+        try:
+            with open(f"Appdata/Marks/{user_id}", "a") as file:
+                file.write(entry)
+        except FileNotFoundError:
+            pass
 
     def on_button_press(self, instance):
         def goto_main():
@@ -297,6 +301,8 @@ class HiMark(App):
             goto_main()
 
     def build(self):
+        self.dir_check =
+
         self.sm = ScreenManager()
 
         # main/initial screen, select user or add user
