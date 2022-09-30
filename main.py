@@ -9,11 +9,45 @@ from kivy.uix.label import Label
 from datetime import datetime
 import sqlite3
 from pathlib import Path
+import socket
+
+
+class Client:
+    def __init__(self):
+        SERVER_HOST = "192.168.178.29"
+        SERVER_PORT = 5001
+        # receive 4096 bytes each time
+        BUFFER_SIZE = 4096
+        SEPARATOR = "123"
+
+        s = socket.socket()
+
+        # bind the socket to our local address
+        s.bind((SERVER_HOST, SERVER_PORT))
+
+        # enabling our server to accept connections
+        # 5 here is the number of unaccepted connections that
+        # the system will allow before refusing new connections
+        s.listen(5)
+        print(f"[*] Listening as {SERVER_HOST}:{SERVER_PORT}")
+
+        client_socket, address = s.accept()
+        # if below code is executed, that means the sender is connected
+        print(f"[+] {address} is connected.")
+
+        received = client_socket.recv(BUFFER_SIZE).decode()
+
+        print(received)
+
+        # close the client socket
+        # client_socket.close()
+        # close the server socket
+        # s.close()
 
 
 class DBConnection:
     def __init__(self):
-        self.con = sqlite3.connect("appdata.db")
+        self.con = sqlite3.connect(Path("Appdata") / "database.db")
         self.cur = self.con.cursor()
 
     def insert_into(self, table, values, cols, multi_insert=False):
@@ -38,7 +72,7 @@ class DBConnection:
 class User:
     def __init__(self, username, user_id):
         self.username = username
-        self.user_id = int(user_id)
+        self.user_id = user_id
 
     def __str__(self):
         return f"{self.username}"
@@ -50,12 +84,12 @@ class User:
 class Item:
     def __init__(self, name, price, category, item_id):
         self.name = name
-        self.price = float(price)
+        self.price = price
         self.category = category
         self.item_id = item_id
 
     def __repr__(self):
-        return self.name + f"\n{self.price:.2f} €"
+        return self.name + f"\n{float(self.price):.2f} €"
 
 
 class NewUserLayout(GridLayout):
@@ -90,12 +124,21 @@ class HiMark(App):
         self.qty_fields = {}
         self.current_status = ""
         self.db_con = DBConnection()
+        new_client = Client()
+
+
+    def update_items(self):
+        """
+        send request to server
+        ...
+        :return:
+        """
+        pass
 
     def check_dir(self):
-        if not (Path("Appdata") / "Marks").is_dir():
-            p = Path("temp/")
-            p.mkdir(parents=True, exist_ok=True)
-
+        p = Path("Appdata") / "Marks"
+        if not p.is_dir():
+            p.mkdir(parents=True)
 
     def get_users(self):
         all_users = self.db_con.select_from("users")
@@ -104,7 +147,6 @@ class HiMark(App):
         for user in all_users:
             new_user = User(*user)
             users.append(new_user)
-
         users.sort(key=lambda x: x.username)
 
         return users
@@ -247,24 +289,24 @@ class HiMark(App):
                 break
 
     def buy_item(self, user, item_id):
-        user_id = user.user_id
+        user_id, item_id = str(user.user_id), str(item_id)
         entry = ""
         for item in self.items:
-            if item.item_id == item_id:
-                now = datetime.now()
+            if str(item.item_id) == item_id:
+                now, price = str(datetime.now()), str(item.price)
                 qty = self.qty_fields[item.category].text
 
-                vals = (now, qty, item.name, item.price, item_id, user_id)
+                vals = (now, qty, item.name, price, item_id, user_id)
                 cols = ("time", "qty", "name", "price", "item_id", "user_id")
                 self.db_con.insert_into("marks", vals, cols)
 
                 self.status_field.text = f"Added {qty}x {item.name} to\n {user.username}"
 
-                entry = "__".join([now, qty, item.name, item.price, item_id, user_id])
+                entry = "__".join([now, qty, item.name, price, item_id, user_id])
                 break
 
-        with open(f"Appdata/Marks/{user_id}", "a") as file:
-            file.write(entry)
+        with open(f"Appdata/Marks/{int(user_id)}", "a") as file:
+            file.write(entry + "\n")
 
     def on_button_press(self, instance):
         def goto_main():
@@ -306,7 +348,7 @@ class HiMark(App):
             goto_main()
 
     def build(self):
-        self.dir_check =
+        self.check_dir()
 
         self.sm = ScreenManager()
 

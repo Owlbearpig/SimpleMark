@@ -1,18 +1,19 @@
-master - slave - backup
-dev1 - dev2 - main
+dev1 (master) - dev2 (slave) - main (backup, storage)
 
 read from db, use files as redundancy.
 
 users (readonly): stored on dev1, read by main and dev2.
 
-items (readonly): stored on main can be read by dev1 and dev2. Settings button to update.
+items (readonly): Settings button to update from main. (stored on main can be read by dev1 and dev2. )
 
 purchases (readonly): stored on dev1 and dev2 (not synced, but timestamp) can be read by main.
 
 (extra: main process purchases and make stats that can be read from dev1 and dev2.)
 
 
-Store user and purchases as simple files (like it is now) and same time add to tables in appdata.db
-appdata.db is then copied using TCP with checksum confirmation
+Store user and purchases as simple files (like it is now) and same time add to tables in database.db
+database.db is then copied using TCP with checksum confirmation
 
-server only accept known ips (should be static anyways)
+- server only accept known ips (should be static anyways)
+
+- check file transfers with checksums
