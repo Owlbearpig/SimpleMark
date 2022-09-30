@@ -8,6 +8,7 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from datetime import datetime
 import sqlite3
+from pathlib import Path
 
 
 class DBConnection:
@@ -89,6 +90,12 @@ class HiMark(App):
         self.qty_fields = {}
         self.current_status = ""
         self.db_con = DBConnection()
+
+    def check_dir(self):
+        if not (Path("Appdata") / "Marks").is_dir():
+            p = Path("temp/")
+            p.mkdir(parents=True, exist_ok=True)
+
 
     def get_users(self):
         all_users = self.db_con.select_from("users")
@@ -255,11 +262,9 @@ class HiMark(App):
 
                 entry = "__".join([now, qty, item.name, item.price, item_id, user_id])
                 break
-        try:
-            with open(f"Appdata/Marks/{user_id}", "a") as file:
-                file.write(entry)
-        except FileNotFoundError:
-            pass
+
+        with open(f"Appdata/Marks/{user_id}", "a") as file:
+            file.write(entry)
 
     def on_button_press(self, instance):
         def goto_main():
