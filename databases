@@ -5,6 +5,7 @@ read from db, use files as redundancy.
 users (readonly): stored on dev1, read by main and dev2.
 
 items (readonly): Settings button to update from main. (stored on main can be read by dev1 and dev2. )
+(almost done, need connect to both dev1 and dev2)
 
 purchases (readonly): stored on dev1 and dev2 (not synced, but timestamp) can be read by main.
 
@@ -17,3 +18,5 @@ database.db is then copied using TCP with checksum confirmation
 - server only accept known ips (should be static anyways)
 
 - check file transfers with checksums
+
+- server ui, with log window

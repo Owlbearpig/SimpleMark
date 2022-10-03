@@ -1,7 +1,7 @@
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
-from kivy.app import App
+from kivy.app import App, async_runTouchApp
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
@@ -10,44 +10,80 @@ from datetime import datetime
 import sqlite3
 from pathlib import Path
 import socket
+import trio
+import pickle
 
 
-class Client:
-    def __init__(self):
-        SERVER_HOST = "192.168.178.29"
-        SERVER_PORT = 5001
+class TCPConnection:
+    def __init__(self, db_con):
+        self.db_con = db_con
+        self.host = "192.168.178.29"
+        self.port = 12345
+        self.addr_whitelist = ["192.168.178.29"]
+        self.cmd_len = 128
         # receive 4096 bytes each time
-        BUFFER_SIZE = 4096
+        self.buffer_size = 4096
         SEPARATOR = "123"
 
-        s = socket.socket()
+    async def listen(self):
+        while True:
+            await trio.sleep(0.5)
+            listeners = (await trio.open_tcp_listeners(self.port, host=self.host))
+            for listener in listeners:
+                async with listener:
+                    socket_stream = await self.accept(listener)
 
-        # bind the socket to our local address
-        s.bind((SERVER_HOST, SERVER_PORT))
+                    await self.stream_handler(socket_stream)
 
-        # enabling our server to accept connections
-        # 5 here is the number of unaccepted connections that
-        # the system will allow before refusing new connections
-        s.listen(5)
-        print(f"[*] Listening as {SERVER_HOST}:{SERVER_PORT}")
+    async def accept(self, listener):
+        stream = await listener.accept()
+        addr, port = stream.socket.getpeername()
 
-        client_socket, address = s.accept()
-        # if below code is executed, that means the sender is connected
-        print(f"[+] {address} is connected.")
+        print(f"Addr: {addr}:{port} connected")
+        if addr not in self.addr_whitelist:
+            await stream.aclose()
+        else:
+            print(f"Accepted {addr}:{port}")
 
-        received = client_socket.recv(BUFFER_SIZE).decode()
+        return stream
 
-        print(received)
+    async def stream_handler(self, stream):
+        cmd = (await stream.receive_some(self.cmd_len)).decode()
+        print("cmd:", cmd.replace("0", ""))
 
-        # close the client socket
-        # client_socket.close()
-        # close the server socket
-        # s.close()
+        try:
+            if "push items" in cmd:
+                await self.update_items(stream)
+            elif "get marks" in cmd:
+                await self.send_marks(stream)
+
+        except trio.ClosedResourceError as e:
+            print(e)
+
+    async def update_items(self, stream):
+        chunk_s = ""
+        async for chunk in stream:
+            chunk_s += chunk.decode()
+
+        self.db_con.truncate_table("items")
+
+        for line in chunk_s.split("\n"):
+            cols = ("name", "price", "category", "item_id")
+            values = line.split("__")
+            if len(values) == 4:
+                self.db_con.insert_into("items", values, cols)
+
+    async def send_marks(self, stream):
+        all_marks = self.db_con.select_from("marks")
+        async with stream:
+            data = pickle.dumps(all_marks)
+            for chunk in iter(lambda: file.read(self.buffer_size), b""):
+                await stream.send_all(chunk)
 
 
 class DBConnection:
-    def __init__(self):
-        self.con = sqlite3.connect(Path("Appdata") / "database.db")
+    def __init__(self, db=Path("Appdata") / "database.db"):
+        self.con = sqlite3.connect(db)
         self.cur = self.con.cursor()
 
     def insert_into(self, table, values, cols, multi_insert=False):
@@ -67,6 +103,11 @@ class DBConnection:
         result = self.cur.fetchall()
 
         return result
+
+    def truncate_table(self, table):
+        # deletes content of table...
+        self.cur.execute(f"DELETE FROM {table}")
+        self.con.commit()
 
 
 class User:
@@ -122,18 +163,11 @@ class HiMark(App):
         super(HiMark, self).__init__(**kwargs)
         self.selected_user = None
         self.qty_fields = {}
+        # text to be displayed on users screen
         self.current_status = ""
         self.db_con = DBConnection()
-        new_client = Client()
+        self.tcp_queue = []
 
-
-    def update_items(self):
-        """
-        send request to server
-        ...
-        :return:
-        """
-        pass
 
     def check_dir(self):
         p = Path("Appdata") / "Marks"
@@ -269,10 +303,18 @@ class HiMark(App):
         row1 = GridLayout()
         row1.cols = 2
 
-        row1.add_widget(Label(text='En. add user'))
+        row1.add_widget(Label(text="En. add user"))
         self.en_add_user = CheckBox(active=True)
         row1.add_widget(self.en_add_user)
         v_layout.add_widget(row1)
+
+        row2 = GridLayout()
+        row2.cols = 2
+        row2.add_widget(Label(text="update items"))
+        update_items_btn = Button(text="update items")
+        update_items_btn.bind(on_press=self.on_button_press)
+        row2.add_widget(update_items_btn)
+        v_layout.add_widget(row2)
 
         go_back_btn = Button(text="Go back", font_size=55)
         go_back_btn.bind(on_press=self.on_button_press)
@@ -346,6 +388,8 @@ class HiMark(App):
         elif any([item.name in button_text for item in self.items]):
             self.buy_item(self.selected_user, instance.ids["item_id"])
             goto_main()
+        elif button_text == "update items":
+            self.tcp_queue.append("update_items")
 
     def build(self):
         self.check_dir()
@@ -382,6 +426,23 @@ class HiMark(App):
 
         return self.sm
 
+    async def app_func(self):
+        async with trio.open_nursery() as nursery:
+            self.nursery = nursery
 
-if __name__ == "__main__":
-    HiMark().run()
+            async def run_wrapper():
+                # trio needs to be set so that it'll be used for the event loop
+                await self.async_run(async_lib='trio')
+                print('App done')
+                nursery.cancel_scope.cancel()
+
+            nursery.start_soon(run_wrapper)
+            nursery.start_soon(self.communication_server)
+
+    async def communication_server(self):
+        new_connection = TCPConnection(self.db_con)
+        await new_connection.listen()
+
+
+if __name__ == '__main__':
+    trio.run(HiMark().app_func)
