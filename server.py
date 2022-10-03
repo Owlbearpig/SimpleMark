@@ -13,6 +13,7 @@ import sqlite3
 from pathlib import Path
 import trio
 from main import DBConnection
+import pickle
 
 
 class ServerApp(App):
@@ -83,9 +84,16 @@ class ServerApp(App):
             cmd = "get marks".zfill(self.cmd_len // 2)
             await stream.send_all(cmd.encode())
 
+            received_data = b""
+            async for chunk in stream:
+                received_data += chunk
 
-        async for chunk in stream:
-            print(chunk)
+            marks = pickle.loads(received_data)
+
+        cols = ("time", "qty", "name", "price", "item_id", "user_id")
+        self.db_con.insert_into("marks", marks, cols, multi_insert=True)
+        # TODO Logging
+
 
     async def app_func(self):
         async with trio.open_nursery() as nursery:

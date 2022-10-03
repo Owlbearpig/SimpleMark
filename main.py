@@ -1,7 +1,7 @@
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
-from kivy.app import App, async_runTouchApp
+from kivy.app import App
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
@@ -12,6 +12,10 @@ from pathlib import Path
 import socket
 import trio
 import pickle
+
+
+def chunker(seq, size):
+    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 
 class TCPConnection:
@@ -77,7 +81,7 @@ class TCPConnection:
         all_marks = self.db_con.select_from("marks")
         async with stream:
             data = pickle.dumps(all_marks)
-            for chunk in iter(lambda: file.read(self.buffer_size), b""):
+            for chunk in chunker(data, self.buffer_size):
                 await stream.send_all(chunk)
 
 
