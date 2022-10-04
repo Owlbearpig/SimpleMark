@@ -113,6 +113,31 @@ class DBConnection:
         self.cur.execute(f"DELETE FROM {table}")
         self.con.commit()
 
+    def update_marks_table(self, table, values, cols, commit_now=True):
+        parameters = ", ".join(["?"] * len(cols))
+        sql = f"INSERT INTO {table} {cols} " \
+              f"SELECT {parameters} " \
+              f"WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE bookID = ? and Username = ?)"
+
+        sql = f"BEGIN IF NOT EXISTS (SELECT * FROM {table} WHERE time = {values[0]})" \
+              f"BEGIN INSERT INTO {table} {cols} VALUES ({parameters}) END END"
+
+        """
+        https://stackoverflow.com/questions/22882513/sqlite-operationalerror-syntax-for-if-not-exists
+        ("IF NOT EXISTS(SELECT 1 FROM Checks WHERE Username =? AND bookID =?) 
+INSERT INTO Checks VALUES(?,?)", (uname, bookid, uname, bookid))
+
+
+insert_stmt = ("INSERT INTO Checks (bookID, Username) "  # note the space at end of string
+                  "SELECT ?, ? "
+                  "WHERE NOT EXISTS (SELECT 1 FROM Checks WHERE bookID = ? and Username = ?)")
+checkCur.execute(insert_stmt, (bookid, uname) * 2)  # no need to repeat the bookid, uname combo twice; just multiply the tuple by 2
+        """
+
+        self.cur.execute(sql, values)
+        if commit_now:
+            self.con.commit()
+
 
 class User:
     def __init__(self, username, user_id):

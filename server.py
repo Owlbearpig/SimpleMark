@@ -91,7 +91,9 @@ class ServerApp(App):
             marks = pickle.loads(received_data)
 
         cols = ("time", "qty", "name", "price", "item_id", "user_id")
-        self.db_con.insert_into("marks", marks, cols, multi_insert=True)
+        for mark in marks:
+            self.db_con.update_marks_table("marks", mark, cols, commit_now=False)
+        self.db_con.con.commit()
         # TODO Logging
 
 
