@@ -2,17 +2,18 @@ import sqlite3
 from main import DBConnection
 from pathlib import Path
 
-new_sql = DBConnection("storage.db")
+new_sql = DBConnection()
 
 cur = new_sql.cur
 #cur.execute("CREATE TABLE items(name, price, category, item_id)")  # only needs to be executed ones obviously
 #cols = ("name", "price", "category", "item_id")
 #cur.execute("CREATE TABLE users(username, user_id)")  # only needs to be executed ones obviously
 #cols = ("username", "user_id")
-#cur.execute("CREATE TABLE marks(time, qty, name, price, item_id, user_id)")  # only needs to be executed ones obviously
-cols = ("username", "user_id")
+cur.execute("CREATE TABLE marks(time, qty, name, price, item_id, user_id)")  # only needs to be executed ones obviously
+#cols = ("username", "user_id")
 
-"""# populate table
+"""
+# populate table
 with open("users", "r") as file:
     for line in file.readlines():
         # split and remove line breaks

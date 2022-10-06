@@ -11,11 +11,10 @@ purchases (readonly): stored on dev1 and dev2 (not synced, but timestamp) can be
 
 (extra: main process purchases and make stats that can be read from dev1 and dev2.)
 
-
 Store user and purchases as simple files (like it is now) and same time add to tables in database.db
 database.db is then copied using TCP with checksum confirmation
 
-- server only accept known ips (should be static anyways)
+- server only accept known ips (should be static anyways) (done)
 
 - check file transfers with checksums
 

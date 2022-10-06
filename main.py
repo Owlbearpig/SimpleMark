@@ -9,7 +9,6 @@ from kivy.uix.label import Label
 from datetime import datetime
 import sqlite3
 from pathlib import Path
-import socket
 import trio
 import pickle
 
@@ -18,12 +17,20 @@ def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 
+class Device:
+    def __init__(self, addr, name):
+        self.addr = addr
+        self.name = name
+
+
 class TCPConnection:
-    def __init__(self, db_con):
+    def __init__(self, db_con, port=12345):
         self.db_con = db_con
-        self.host = "192.168.178.29"
-        self.port = 12345
-        self.addr_whitelist = ["192.168.178.29"]
+        # self.host = "192.168.178.29"
+        self.host_addr = "127.0.0.1"
+        self.port = port
+        self.addr_whitelist = ["127.0.0.1"]
+        self.devices = [Device(self.host_addr, "dev1"), ]
         self.cmd_len = 128
         # receive 4096 bytes each time
         self.buffer_size = 4096
@@ -32,7 +39,7 @@ class TCPConnection:
     async def listen(self):
         while True:
             await trio.sleep(0.5)
-            listeners = (await trio.open_tcp_listeners(self.port, host=self.host))
+            listeners = (await trio.open_tcp_listeners(self.port, host=self.host_addr))
             for listener in listeners:
                 async with listener:
                     socket_stream = await self.accept(listener)
@@ -59,7 +66,9 @@ class TCPConnection:
             if "push items" in cmd:
                 await self.update_items(stream)
             elif "get marks" in cmd:
-                await self.send_marks(stream)
+                await self.send_table(stream, "marks")
+            elif "syncing marks" in cmd:
+                await self.receive_marks(stream)
 
         except trio.ClosedResourceError as e:
             print(e)
@@ -77,18 +86,62 @@ class TCPConnection:
             if len(values) == 4:
                 self.db_con.insert_into("items", values, cols)
 
-    async def send_marks(self, stream):
-        all_marks = self.db_con.select_from("marks")
+    async def receive_marks(self, stream):
         async with stream:
-            data = pickle.dumps(all_marks)
+            received_data = b""
+            async for chunk in stream:
+                received_data += chunk
+
+            marks = pickle.loads(received_data)
+
+        cols = ("time", "qty", "name", "price", "item_id", "user_id")
+        for mark in marks:
+            self.db_con.update_marks_table("marks", mark, cols, commit_now=False)
+        self.db_con.con.commit()
+
+    async def receive_table(self, stream, table):
+        async with stream:
+            received_data = b""
+            async for chunk in stream:
+                received_data += chunk
+
+            marks = pickle.loads(received_data)
+
+        cols = self.db_con.table_cols[table]
+        for mark in marks:
+            self.db_con.update_marks_table("marks", mark, cols, commit_now=False)
+        self.db_con.con.commit()
+
+    async def sync_marks(self):
+        for dev in self.devices:
+            cmd = "sync marks".zfill(self.cmd_len // 2)
+            stream = await trio.open_tcp_stream(dev.addr, self.port)
+            await stream.send_all(cmd.encode())
+            await self.send_table(stream, "marks")
+
+    async def send_table(self, stream, table):
+        entries = self.db_con.select_from(table)
+        async with stream:
+            data = pickle.dumps(entries)
             for chunk in chunker(data, self.buffer_size):
                 await stream.send_all(chunk)
+
+    async def sync_users(self):
+        for dev in self.devices:
+            cmd = "sync users".zfill(self.cmd_len // 2)
+            stream = await trio.open_tcp_stream(dev.addr, self.port)
+            await stream.send_all(cmd.encode())
+            await self.send_table(stream, "users")
 
 
 class DBConnection:
     def __init__(self, db=Path("Appdata") / "database.db"):
         self.con = sqlite3.connect(db)
         self.cur = self.con.cursor()
+        self.table_cols = {"marks": ("time", "qty", "name", "price", "item_id", "user_id"),
+                           "items": ("time", "qty", "name", "price", "item_id", "user_id"),
+                           "users": ("username", "user_id"),
+                           }
 
     def insert_into(self, table, values, cols, multi_insert=False):
         parameters = ", ".join(["?"] * len(cols))
@@ -113,26 +166,30 @@ class DBConnection:
         self.cur.execute(f"DELETE FROM {table}")
         self.con.commit()
 
+    def create_table(self, table, cols):
+        try:
+            self.cur.execute(f"CREATE TABLE {table}{cols}")
+        except sqlite3.OperationalError as e:
+            print(e)
+
     def update_marks_table(self, table, values, cols, commit_now=True):
         parameters = ", ".join(["?"] * len(cols))
-        sql = f"INSERT INTO {table} {cols} " \
-              f"SELECT {parameters} " \
-              f"WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE bookID = ? and Username = ?)"
+        sql = f"INSERT INTO {table} {cols} SELECT {parameters} " \
+              f"WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE time = '{values[0]}')"
 
-        sql = f"BEGIN IF NOT EXISTS (SELECT * FROM {table} WHERE time = {values[0]})" \
-              f"BEGIN INSERT INTO {table} {cols} VALUES ({parameters}) END END"
+        self.cur.execute(sql, values)
+        if commit_now:
+            self.con.commit()
 
-        """
-        https://stackoverflow.com/questions/22882513/sqlite-operationalerror-syntax-for-if-not-exists
-        ("IF NOT EXISTS(SELECT 1 FROM Checks WHERE Username =? AND bookID =?) 
-INSERT INTO Checks VALUES(?,?)", (uname, bookid, uname, bookid))
-
-
-insert_stmt = ("INSERT INTO Checks (bookID, Username) "  # note the space at end of string
-                  "SELECT ?, ? "
-                  "WHERE NOT EXISTS (SELECT 1 FROM Checks WHERE bookID = ? and Username = ?)")
-checkCur.execute(insert_stmt, (bookid, uname) * 2)  # no need to repeat the bookid, uname combo twice; just multiply the tuple by 2
-        """
+    def update_table(self, table, values, cols, commit_now=True):
+        id_expr = ""
+        if table == "marks":
+            id_expr = f"time = '{values[0]}'"
+        if table == "users":
+            id_expr = f"user_id = '{values[1]}'"
+        parameters = ", ".join(["?"] * len(cols))
+        sql = f"INSERT INTO {table} {cols} SELECT {parameters} " \
+              f"WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE {id_expr})"
 
         self.cur.execute(sql, values)
         if commit_now:
@@ -196,7 +253,7 @@ class HiMark(App):
         self.current_status = ""
         self.db_con = DBConnection()
         self.tcp_queue = []
-
+        self.unsynced_marks = False
 
     def check_dir(self):
         p = Path("Appdata") / "Marks"
@@ -320,7 +377,7 @@ class HiMark(App):
 
         if username:
             user_id = str(max([user.user_id for user in self.users]) + 1)
-            self.db_con.insert_into("users", (username, user_id.zfill(5)), ("username", "user_id"))
+            self.db_con.insert_into("users", (username, user_id.zfill(5)), self.db_con.table_cols["users"])
 
         self.users_screen.clear_widgets()
         self.update_users_screen()
@@ -378,6 +435,8 @@ class HiMark(App):
 
         with open(f"Appdata/Marks/{int(user_id)}", "a") as file:
             file.write(entry + "\n")
+
+        self.unsynced_marks = True
 
     def on_button_press(self, instance):
         def goto_main():
@@ -467,10 +526,19 @@ class HiMark(App):
 
             nursery.start_soon(run_wrapper)
             nursery.start_soon(self.communication_server)
+            nursery.start_soon(self.sync_loop)
 
     async def communication_server(self):
-        new_connection = TCPConnection(self.db_con)
+        new_connection = TCPConnection(self.db_con, port=12345)
         await new_connection.listen()
+
+    async def sync_loop(self):
+        while True:
+            await trio.sleep(60 * 10)
+            if self.unsynced_marks:
+                new_connection = TCPConnection(self.db_con, port=12346)
+                await new_connection.sync_marks()
+                self.unsynced_marks = False
 
 
 if __name__ == '__main__':

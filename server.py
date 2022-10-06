@@ -20,7 +20,7 @@ class ServerApp(App):
     def __init__(self, **kwargs):
         super(ServerApp, self).__init__(**kwargs)
         self.db_con = DBConnection("storage.db")
-        self.server_host = "192.168.178.29"
+        self.server_host = "127.0.0.1"
         self.server_port = 12345
         # receive 4096 bytes each time
         self.buffer_size = 4096
@@ -64,10 +64,12 @@ class ServerApp(App):
                         await self.push_items()
                     elif "Get marks" in task:
                         await self.get_marks()
-                except OSError:
+                except OSError as e:
                     print("ehm no connection...")
+                    print(e)
                 finally:
                     self.tasks.remove(task)
+
     async def push_items(self):
         stream = await trio.open_tcp_stream(self.server_host, self.server_port)
         with open("store_items", "rb") as file:
@@ -95,7 +97,6 @@ class ServerApp(App):
             self.db_con.update_marks_table("marks", mark, cols, commit_now=False)
         self.db_con.con.commit()
         # TODO Logging
-
 
     async def app_func(self):
         async with trio.open_nursery() as nursery:
