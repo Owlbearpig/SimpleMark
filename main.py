@@ -68,7 +68,9 @@ class TCPConnection:
             elif "get marks" in cmd:
                 await self.send_table(stream, "marks")
             elif "syncing marks" in cmd:
-                await self.receive_marks(stream)
+                await self.receive_table(stream, "marks")
+            elif "syncing users" in cmd:
+                await self.receive_table(stream, "users")
 
         except trio.ClosedResourceError as e:
             print(e)
@@ -86,19 +88,6 @@ class TCPConnection:
             if len(values) == 4:
                 self.db_con.insert_into("items", values, cols)
 
-    async def receive_marks(self, stream):
-        async with stream:
-            received_data = b""
-            async for chunk in stream:
-                received_data += chunk
-
-            marks = pickle.loads(received_data)
-
-        cols = ("time", "qty", "name", "price", "item_id", "user_id")
-        for mark in marks:
-            self.db_con.update_marks_table("marks", mark, cols, commit_now=False)
-        self.db_con.con.commit()
-
     async def receive_table(self, stream, table):
         async with stream:
             received_data = b""
@@ -109,7 +98,7 @@ class TCPConnection:
 
         cols = self.db_con.table_cols[table]
         for mark in marks:
-            self.db_con.update_marks_table("marks", mark, cols, commit_now=False)
+            self.db_con.update_table(table, mark, cols, commit_now=False)
         self.db_con.con.commit()
 
     async def sync_marks(self):
@@ -119,6 +108,13 @@ class TCPConnection:
             await stream.send_all(cmd.encode())
             await self.send_table(stream, "marks")
 
+    async def sync_users(self):
+        for dev in self.devices:
+            cmd = "sync users".zfill(self.cmd_len // 2)
+            stream = await trio.open_tcp_stream(dev.addr, self.port)
+            await stream.send_all(cmd.encode())
+            await self.send_table(stream, "users")
+
     async def send_table(self, stream, table):
         entries = self.db_con.select_from(table)
         async with stream:
@@ -126,12 +122,7 @@ class TCPConnection:
             for chunk in chunker(data, self.buffer_size):
                 await stream.send_all(chunk)
 
-    async def sync_users(self):
-        for dev in self.devices:
-            cmd = "sync users".zfill(self.cmd_len // 2)
-            stream = await trio.open_tcp_stream(dev.addr, self.port)
-            await stream.send_all(cmd.encode())
-            await self.send_table(stream, "users")
+
 
 
 class DBConnection:
@@ -171,15 +162,6 @@ class DBConnection:
             self.cur.execute(f"CREATE TABLE {table}{cols}")
         except sqlite3.OperationalError as e:
             print(e)
-
-    def update_marks_table(self, table, values, cols, commit_now=True):
-        parameters = ", ".join(["?"] * len(cols))
-        sql = f"INSERT INTO {table} {cols} SELECT {parameters} " \
-              f"WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE time = '{values[0]}')"
-
-        self.cur.execute(sql, values)
-        if commit_now:
-            self.con.commit()
 
     def update_table(self, table, values, cols, commit_now=True):
         id_expr = ""
@@ -254,6 +236,7 @@ class HiMark(App):
         self.db_con = DBConnection()
         self.tcp_queue = []
         self.unsynced_marks = False
+        self.unsynced_users = False
 
     def check_dir(self):
         p = Path("Appdata") / "Marks"
@@ -381,6 +364,7 @@ class HiMark(App):
 
         self.users_screen.clear_widgets()
         self.update_users_screen()
+        self.unsynced_users = True
 
     def settings_screen(self):
         settings_screen = Screen(name="settings")
@@ -539,6 +523,10 @@ class HiMark(App):
                 new_connection = TCPConnection(self.db_con, port=12346)
                 await new_connection.sync_marks()
                 self.unsynced_marks = False
+            if self.unsynced_users:
+                new_connection = TCPConnection(self.db_con, port=12347)
+                await new_connection.sync_users()
+                self.unsynced_users = False
 
 
 if __name__ == '__main__':
