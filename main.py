@@ -404,7 +404,7 @@ class HiMark(App):
                 qty = self.qty_fields[item.category].text
 
                 vals = (now, qty, item.name, price, item_id, user_id)
-                cols = self.db_con.table_cols["items"]
+                cols = self.db_con.table_cols["marks"]
                 self.db_con.insert_into("marks", vals, cols)
 
                 self.status_field.text = f"Added {qty}x {item.name} to\n {user.username}"
