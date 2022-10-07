@@ -1,21 +1,19 @@
 dev1 (master) - dev2 (slave) - main (backup, storage)
 
-read from db, use files as redundancy.
-
-users (readonly): stored on dev1, read by main and dev2.
+users (readonly): stored on dev1, synced to main and dev2.
+(done, needs testing)
 
 items (readonly): Settings button to update from main. (stored on main can be read by dev1 and dev2. )
-(almost done, need connect to both dev1 and dev2)
+(done, needs testing)
 
-purchases (readonly): stored on dev1 and dev2 (not synced, but timestamp) can be read by main.
+marks: stored on dev1 and dev2, synced(tables are supposed to be equal) to all devices via timestamp
+(done, needs testing)
 
-(extra: main process purchases and make stats that can be read from dev1 and dev2.)
+(extra: stats that can be read from dev1 and dev2.)
 
-Store user and purchases as simple files (like it is now) and same time add to tables in database.db
-database.db is then copied using TCP with checksum confirmation
+- drop unknown ips (should be static anyways) (done)
 
-- server only accept known ips (should be static anyways) (done)
+- check file transfers with checksums, only remove flag if returned checksum is equal,
+to confirm success. What about fails?
 
-- check file transfers with checksums
-
-- server ui, with log window
+(- server ui, with log window)

@@ -12,7 +12,7 @@ from datetime import datetime
 import sqlite3
 from pathlib import Path
 import trio
-from main import DBConnection
+from main import DBConnection, Device
 import pickle
 
 
@@ -22,6 +22,7 @@ class ServerApp(App):
         self.db_con = DBConnection("storage.db")
         self.server_host = "127.0.0.1"
         self.server_port = 12345
+        self.devices = [Device(self.server_host, "dev1"), ]
         # receive 4096 bytes each time
         self.buffer_size = 4096
         self.cmd_len = 128
@@ -71,14 +72,15 @@ class ServerApp(App):
                     self.tasks.remove(task)
 
     async def push_items(self):
-        stream = await trio.open_tcp_stream(self.server_host, self.server_port)
-        with open("store_items", "rb") as file:
-            async with stream:
-                cmd = "push items".zfill(self.cmd_len // 2)
-                await stream.send_all(cmd.encode())
-                # iterate over lambda? until reaching b""
-                for chunk in iter(lambda: file.read(self.buffer_size), b""):
-                    await stream.send_all(chunk)
+        for dev in self.devices:
+            stream = await trio.open_tcp_stream(dev.addr, self.server_port)
+            with open("store_items", "rb") as file:
+                async with stream:
+                    cmd = "push items".zfill(self.cmd_len // 2)
+                    await stream.send_all(cmd.encode())
+                    # iterate over lambda? until reaching b""
+                    for chunk in iter(lambda: file.read(self.buffer_size), b""):
+                        await stream.send_all(chunk)
 
     async def get_marks(self):
         stream = await trio.open_tcp_stream(self.server_host, self.server_port)
@@ -92,9 +94,9 @@ class ServerApp(App):
 
             marks = pickle.loads(received_data)
 
-        cols = ("time", "qty", "name", "price", "item_id", "user_id")
+        cols = self.db_con.table_cols["marks"]
         for mark in marks:
-            self.db_con.update_marks_table("marks", mark, cols, commit_now=False)
+            self.db_con.update_table("marks", mark, cols, commit_now=False)
         self.db_con.con.commit()
         # TODO Logging
 
@@ -115,11 +117,11 @@ class ServerApp(App):
 if __name__ == '__main__':
     trio.run(ServerApp().app_func)
 
-"""
+
 def md5(fname):
     hash_md5 = hashlib.md5()
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
-"""
+

@@ -43,7 +43,6 @@ class TCPConnection:
             for listener in listeners:
                 async with listener:
                     socket_stream = await self.accept(listener)
-
                     await self.stream_handler(socket_stream)
 
     async def accept(self, listener):
@@ -83,7 +82,7 @@ class TCPConnection:
         self.db_con.truncate_table("items")
 
         for line in chunk_s.split("\n"):
-            cols = ("name", "price", "category", "item_id")
+            cols = self.db_con.table_cols["items"]
             values = line.split("__")
             if len(values) == 4:
                 self.db_con.insert_into("items", values, cols)
@@ -513,18 +512,18 @@ class HiMark(App):
             nursery.start_soon(self.sync_loop)
 
     async def communication_server(self):
-        new_connection = TCPConnection(self.db_con, port=12345)
+        new_connection = TCPConnection(self.db_con)
         await new_connection.listen()
 
     async def sync_loop(self):
         while True:
-            await trio.sleep(60 * 10)
+            await trio.sleep(10)
             if self.unsynced_marks:
-                new_connection = TCPConnection(self.db_con, port=12346)
+                new_connection = TCPConnection(self.db_con)
                 await new_connection.sync_marks()
                 self.unsynced_marks = False
             if self.unsynced_users:
-                new_connection = TCPConnection(self.db_con, port=12347)
+                new_connection = TCPConnection(self.db_con)
                 await new_connection.sync_users()
                 self.unsynced_users = False
 
