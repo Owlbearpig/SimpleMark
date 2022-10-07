@@ -26,11 +26,12 @@ class Device:
 class TCPConnection:
     def __init__(self, db_con, port=12345):
         self.db_con = db_con
-        # self.host = "192.168.178.29"
+        # self.host_addr = "192.168.178.29"
+        # self.host_addr = "192.168.52.9"
         self.host_addr = "127.0.0.1"
         self.port = port
-        self.addr_whitelist = ["127.0.0.1"]
-        self.devices = [Device(self.host_addr, "dev1"), ]
+        self.addr_whitelist = ["127.0.0.1", "192.168.52.6", "192.168.52.9"]
+        self.devices = [Device("192.168.52.9", "dev1"), ]
         self.cmd_len = 128
         # receive 4096 bytes each time
         self.buffer_size = 4096
@@ -43,7 +44,8 @@ class TCPConnection:
             for listener in listeners:
                 async with listener:
                     socket_stream = await self.accept(listener)
-                    await self.stream_handler(socket_stream)
+                    if socket_stream is not None:
+                        await self.stream_handler(socket_stream)
 
     async def accept(self, listener):
         stream = await listener.accept()
@@ -52,10 +54,10 @@ class TCPConnection:
         print(f"Addr: {addr}:{port} connected")
         if addr not in self.addr_whitelist:
             await stream.aclose()
+            return
         else:
             print(f"Accepted {addr}:{port}")
-
-        return stream
+            return stream
 
     async def stream_handler(self, stream):
         cmd = (await stream.receive_some(self.cmd_len)).decode()

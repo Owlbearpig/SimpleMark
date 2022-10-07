@@ -22,7 +22,7 @@ class ServerApp(App):
         self.db_con = DBConnection("storage.db")
         self.server_host = "127.0.0.1"
         self.server_port = 12345
-        self.devices = [Device(self.server_host, "dev1"), ]
+        self.devices = [Device("192.168.52.9", "dev1"), ]
         # receive 4096 bytes each time
         self.buffer_size = 4096
         self.cmd_len = 128
@@ -65,7 +65,7 @@ class ServerApp(App):
                         await self.push_items()
                     elif "Get marks" in task:
                         await self.get_marks()
-                except OSError as e:
+                except Exception as e:
                     print("ehm no connection...")
                     print(e)
                 finally:
@@ -83,22 +83,23 @@ class ServerApp(App):
                         await stream.send_all(chunk)
 
     async def get_marks(self):
-        stream = await trio.open_tcp_stream(self.server_host, self.server_port)
-        async with stream:
-            cmd = "get marks".zfill(self.cmd_len // 2)
-            await stream.send_all(cmd.encode())
+        for dev in self.devices:
+            stream = await trio.open_tcp_stream(dev.addr, self.server_port)
+            async with stream:
+                cmd = "get marks".zfill(self.cmd_len // 2)
+                await stream.send_all(cmd.encode())
 
-            received_data = b""
-            async for chunk in stream:
-                received_data += chunk
+                received_data = b""
+                async for chunk in stream:
+                    received_data += chunk
 
-            marks = pickle.loads(received_data)
+                marks = pickle.loads(received_data)
 
-        cols = self.db_con.table_cols["marks"]
-        for mark in marks:
-            self.db_con.update_table("marks", mark, cols, commit_now=False)
-        self.db_con.con.commit()
-        # TODO Logging
+            cols = self.db_con.table_cols["marks"]
+            for mark in marks:
+                self.db_con.update_table("marks", mark, cols, commit_now=False)
+            self.db_con.con.commit()
+            # TODO Logging
 
     async def app_func(self):
         async with trio.open_nursery() as nursery:
