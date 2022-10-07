@@ -22,6 +22,9 @@ class Device:
         self.addr = addr
         self.name = name
 
+    def __str__(self):
+        return f"addr: {self.addr}, name: {self.name}"
+
 
 class TCPConnection:
     def __init__(self, db_con, port=12345):
@@ -72,7 +75,6 @@ class TCPConnection:
                 await self.receive_table(stream, "marks")
             elif "syncing users" in cmd:
                 await self.receive_table(stream, "users")
-
         except trio.ClosedResourceError as e:
             print(e)
 
@@ -102,19 +104,13 @@ class TCPConnection:
             self.db_con.update_table(table, mark, cols, commit_now=False)
         self.db_con.con.commit()
 
-    async def sync_marks(self):
+    async def sync_table(self, table):
         for dev in self.devices:
-            cmd = "sync marks".zfill(self.cmd_len // 2)
+            print(f"syncing {table}, dev: {dev}")
+            cmd = f"sync {table}".zfill(self.cmd_len // 2)
             stream = await trio.open_tcp_stream(dev.addr, self.port)
             await stream.send_all(cmd.encode())
-            await self.send_table(stream, "marks")
-
-    async def sync_users(self):
-        for dev in self.devices:
-            cmd = "sync users".zfill(self.cmd_len // 2)
-            stream = await trio.open_tcp_stream(dev.addr, self.port)
-            await stream.send_all(cmd.encode())
-            await self.send_table(stream, "users")
+            await self.send_table(stream, table)
 
     async def send_table(self, stream, table):
         entries = self.db_con.select_from(table)
@@ -124,14 +120,12 @@ class TCPConnection:
                 await stream.send_all(chunk)
 
 
-
-
 class DBConnection:
     def __init__(self, db=Path("Appdata") / "database.db"):
         self.con = sqlite3.connect(db)
         self.cur = self.con.cursor()
         self.table_cols = {"marks": ("time", "qty", "name", "price", "item_id", "user_id"),
-                           "items": ("time", "qty", "name", "price", "item_id", "user_id"),
+                           "items": ("name", "price", "category", "item_id"),
                            "users": ("username", "user_id"),
                            }
 
@@ -410,7 +404,7 @@ class HiMark(App):
                 qty = self.qty_fields[item.category].text
 
                 vals = (now, qty, item.name, price, item_id, user_id)
-                cols = ("time", "qty", "name", "price", "item_id", "user_id")
+                cols = self.db_con.table_cols["items"]
                 self.db_con.insert_into("marks", vals, cols)
 
                 self.status_field.text = f"Added {qty}x {item.name} to\n {user.username}"
@@ -520,14 +514,17 @@ class HiMark(App):
     async def sync_loop(self):
         while True:
             await trio.sleep(10)
-            if self.unsynced_marks:
-                new_connection = TCPConnection(self.db_con)
-                await new_connection.sync_marks()
-                self.unsynced_marks = False
-            if self.unsynced_users:
-                new_connection = TCPConnection(self.db_con)
-                await new_connection.sync_users()
-                self.unsynced_users = False
+            try:
+                if self.unsynced_marks or self.unsynced_users:
+                    new_connection = TCPConnection(self.db_con)
+                    if self.unsynced_marks:
+                        await new_connection.sync_table("marks")
+                        self.unsynced_marks = False
+                    if self.unsynced_users:
+                        await new_connection.sync_table("users")
+                        self.unsynced_users = False
+            except Exception as e:
+                print(e)
 
 
 if __name__ == '__main__':
