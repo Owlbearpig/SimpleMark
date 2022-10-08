@@ -14,7 +14,7 @@ class BackupAppBackend:
         self.server_host = self.config["host_address"]
         # receive 4096 bytes each time
         self.buffer_size = 4096
-        self.cmd_len = 128
+        self.cmd_len = 64
         self.devices = [Device("192.168.52.6", "server", self.config),
                         Device("192.168.52.9", "dev1", self.config),
                         Device("192.168.52.10", "dev2", self.config)]
@@ -42,7 +42,7 @@ class BackupAppBackend:
             stream = await trio.open_tcp_stream(dev.addr, self.server_port)
             with open("store_items", "rb") as file:
                 async with stream:
-                    cmd = "push items".zfill(self.cmd_len // 2)
+                    cmd = "push items".zfill(self.cmd_len)
                     await stream.send_all(cmd.encode())
                     # iterate over lambda? until reaching b""
                     for chunk in iter(lambda: file.read(self.buffer_size), b""):
@@ -52,7 +52,7 @@ class BackupAppBackend:
         for dev in self.devices:
             stream = await trio.open_tcp_stream(dev.addr, self.server_port)
             async with stream:
-                cmd = "get marks".zfill(self.cmd_len // 2)
+                cmd = "get marks".zfill(self.cmd_len)
                 await stream.send_all(cmd.encode())
 
                 received_data = b""

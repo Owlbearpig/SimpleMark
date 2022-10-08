@@ -16,7 +16,7 @@ class TCPCommunication:
         self.config = yaml.safe_load(open("config.yml"))
         self.host_addr = self.config["host_address"]
         self.port = port
-        self.cmd_len = 128
+        self.cmd_len = 64
         # receive 4096 bytes each time
         self.buffer_size = 4096
 
@@ -45,7 +45,6 @@ class TCPCommunication:
     async def stream_handler(self, stream):
         try:
             cmd_bytes = await stream.receive_some(self.cmd_len)
-            print(cmd_bytes)
             cmd = cmd_bytes.decode()
             print("cmd:", cmd.replace("0", ""))
         except UnicodeDecodeError as e:
