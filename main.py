@@ -74,6 +74,9 @@ class HiMark(App):
         all_items = self.db_con.select_from("items")
         items = []
         for item in all_items:
+            item = list(item)
+            item[-1] = item[-1].replace("\r", "")
+
             new_item = Item(*item)
             items.append(new_item)
 
@@ -175,7 +178,7 @@ class HiMark(App):
         username = self.new_user_layout.username_input.text
 
         if username:
-            user_id = str(max([user.user_id for user in self.users]) + 1)
+            user_id = str(max([int(user.user_id) for user in self.users]) + 1)
             self.db_con.insert_into("users", (username, user_id.zfill(5)), self.db_con.table_cols["users"])
 
         self.users_screen.clear_widgets()
