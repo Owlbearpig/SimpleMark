@@ -4,17 +4,17 @@ from tcpcommunication import TCPCommunication
 from custom_objects import Device
 import pickle
 import yaml
+from helpers import format_cmd
 
 
 class BackupAppBackend:
     def __init__(self):
         self.db_con = DBConnection("storage.db")
-        self.server_port = 12345
         self.config = yaml.safe_load(open("config.yml"))
+        self.server_port = self.config["server_port"]
         self.server_host = self.config["host_address"]
-        # receive 4096 bytes each time
-        self.buffer_size = 4096
-        self.cmd_len = 64
+        self.buffer_size = self.config["buffer_size"]
+        self.cmd_len = self.config["cmd_len"]
         self.devices = [Device("192.168.52.6", "server", self.config),
                         Device("192.168.52.9", "dev1", self.config),
                         Device("192.168.52.10", "dev2", self.config)]
@@ -30,7 +30,7 @@ class BackupAppBackend:
                     elif "Get marks" in task:
                         await self.get_marks()
                     elif "sync users" in task:
-                        await self.sync_users()
+                        await self.sync_users() # TODO trigger sync
                 except Exception as e:
                     print("ehm no connection...")
                     print(e)
@@ -39,11 +39,13 @@ class BackupAppBackend:
 
     async def push_items(self):
         for dev in self.devices:
+            if dev.is_host:
+                continue
             stream = await trio.open_tcp_stream(dev.addr, self.server_port)
             with open("store_items", "rb") as file:
                 async with stream:
-                    cmd = "push items".zfill(self.cmd_len)
-                    await stream.send_all(cmd.encode())
+                    cmd = format_cmd("push items")
+                    await stream.send_all(cmd)
                     # iterate over lambda? until reaching b""
                     for chunk in iter(lambda: file.read(self.buffer_size), b""):
                         await stream.send_all(chunk)
@@ -52,8 +54,8 @@ class BackupAppBackend:
         for dev in self.devices:
             stream = await trio.open_tcp_stream(dev.addr, self.server_port)
             async with stream:
-                cmd = "get marks".zfill(self.cmd_len)
-                await stream.send_all(cmd.encode())
+                cmd = format_cmd("get marks")
+                await stream.send_all(cmd)
 
                 received_data = b""
                 async for chunk in stream:

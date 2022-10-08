@@ -1,29 +1,23 @@
 import trio
 import pickle
 import yaml
-
-
-def chunker(seq, size):
-    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+from helpers import chunker, format_cmd
 
 
 class TCPCommunication:
-    def __init__(self, db_con, devices, port=12345):
+    def __init__(self, db_con, devices):
         self.db_con = db_con
         self.devices = devices
-        # self.host_addr = "192.168.178.29"
-        # self.host_addr = "192.168.52.9"
         self.config = yaml.safe_load(open("config.yml"))
         self.host_addr = self.config["host_address"]
-        self.port = port
-        self.cmd_len = 64
-        # receive 4096 bytes each time
-        self.buffer_size = 4096
+        self.port = self.config["server_port"]
+        self.cmd_len = self.config["cmd_len"]
+        self.buffer_size = self.config["buffer_size"]
 
     async def listen(self):
         while True:
             await trio.sleep(0.5)
-            listeners = (await trio.open_tcp_listeners(self.port, host=self.host_addr))
+            listeners = (await trio.open_tcp_listeners(host=self.host_addr, port=self.port))
             for listener in listeners:
                 async with listener:
                     socket_stream = await self.accept(listener)
@@ -43,14 +37,9 @@ class TCPCommunication:
             return stream
 
     async def stream_handler(self, stream):
-        try:
-            cmd_bytes = await stream.receive_some(self.cmd_len)
-            cmd = cmd_bytes.decode()
-            print("cmd:", cmd.replace("0", ""))
-        except UnicodeDecodeError as e:
-            cmd = ""
-            print(e)
-            await stream.aclose()
+        cmd_bytes = await stream.receive_some(self.cmd_len)
+        cmd = cmd_bytes.decode()
+        print("cmd:", cmd.replace("0", ""))
 
         try:
             if "push items" in cmd:
@@ -74,6 +63,7 @@ class TCPCommunication:
         for line in chunk_s.split("\n"):
             cols = self.db_con.table_cols["items"]
             values = line.split("__")
+            print(values)
             if len(values) == 4:
                 self.db_con.insert_into("items", values, cols)
 
@@ -93,9 +83,9 @@ class TCPCommunication:
     async def sync_table(self, dev, table):
         try:
             print(f"sending {table} to {dev}")
-            cmd = f"receive {table}".zfill(self.cmd_len)
+            cmd = format_cmd(f"receive {table}")
             stream = await trio.open_tcp_stream(dev.addr, self.port)
-            await stream.send_all(cmd.encode())
+            await stream.send_all(cmd)
             await self.send_table(stream, table)
             print(f"successfully synced {table} with {dev}")
             return 0
