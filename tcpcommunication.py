@@ -18,7 +18,7 @@ class TCPCommunication:
         self.port = port
         self.cmd_len = 128
         # receive 4096 bytes each time
-        self.buffer_size = 4096
+        self.buffer_size = 64
 
     async def listen(self):
         while True:
