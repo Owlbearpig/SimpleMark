@@ -66,7 +66,7 @@ class BackupAppBackend:
             # TODO Logging
 
     async def communication(self):
-        new_connection = TCPCommunication(self.db_con, self.config)
+        new_connection = TCPCommunication(self.db_con, self.devices)
         await new_connection.listen()
 
     async def run(self):

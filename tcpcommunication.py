@@ -43,8 +43,13 @@ class TCPCommunication:
             return stream
 
     async def stream_handler(self, stream):
-        cmd = (await stream.receive_some(self.cmd_len)).decode()
-        print("cmd:", cmd.replace("0", ""))
+        try:
+            cmd = (await stream.receive_some(self.cmd_len)).decode()
+            print("cmd:", cmd.replace("0", ""))
+        except UnicodeDecodeError as e:
+            cmd = ""
+            print(e)
+            await stream.aclose()
 
         try:
             if "push items" in cmd:
