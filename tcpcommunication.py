@@ -18,7 +18,7 @@ class TCPCommunication:
         self.port = port
         self.cmd_len = 128
         # receive 4096 bytes each time
-        self.buffer_size = 64
+        self.buffer_size = 4096
 
     async def listen(self):
         while True:
@@ -44,7 +44,9 @@ class TCPCommunication:
 
     async def stream_handler(self, stream):
         try:
-            cmd = (await stream.receive_some(self.cmd_len)).decode()
+            cmd_bytes = await stream.receive_some(self.cmd_len)
+            print(cmd_bytes)
+            cmd = cmd_bytes.decode()
             print("cmd:", cmd.replace("0", ""))
         except UnicodeDecodeError as e:
             cmd = ""

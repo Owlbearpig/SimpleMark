@@ -13,7 +13,7 @@ class BackupAppBackend:
         self.config = yaml.safe_load(open("config.yml"))
         self.server_host = self.config["host_address"]
         # receive 4096 bytes each time
-        self.buffer_size = 64
+        self.buffer_size = 4096
         self.cmd_len = 128
         self.devices = [Device("192.168.52.6", "server", self.config),
                         Device("192.168.52.9", "dev1", self.config),
