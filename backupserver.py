@@ -1,15 +1,8 @@
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
-from kivy.uix.textinput import TextInput
-from kivy.app import App, async_runTouchApp
-from kivy.uix.checkbox import CheckBox
+from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.label import Label
 import trio
-from datetime import datetime
-import sqlite3
-from pathlib import Path
 from backupserver_backend import BackupAppBackend
 
 
