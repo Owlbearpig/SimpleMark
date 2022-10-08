@@ -56,9 +56,9 @@ class TCPCommunication:
                 await self.update_items(stream)
             elif "get marks" in cmd:
                 await self.send_table(stream, "marks")
-            elif "syncing marks" in cmd:
+            elif "receive marks" in cmd:
                 await self.receive_table(stream, "marks")
-            elif "syncing users" in cmd:
+            elif "receive users" in cmd:
                 await self.receive_table(stream, "users")
         except trio.ClosedResourceError as e:
             print(e)
@@ -91,12 +91,12 @@ class TCPCommunication:
 
     async def sync_table(self, dev, table):
         try:
-            print(f"syncing {table}, dev: {dev}")
-            cmd = f"sync {table}".zfill(self.cmd_len // 2)
+            print(f"sending {table} to {dev}")
+            cmd = f"receive {table}".zfill(self.cmd_len // 2)
             stream = await trio.open_tcp_stream(dev.addr, self.port)
             await stream.send_all(cmd.encode())
             await self.send_table(stream, table)
-            print(f"successfully synced {table} to {dev}")
+            print(f"successfully synced {table} with {dev}")
             return 0
         except Exception as e:
             print(e)
