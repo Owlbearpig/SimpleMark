@@ -94,7 +94,6 @@ class TCPCommunication:
         try:
             print(f"sending {table} to {dev}")
             cmd = f"receive {table}".zfill(self.cmd_len // 2)
-            print(len(bytes(cmd)))
             stream = await trio.open_tcp_stream(dev.addr, self.port)
             await stream.send_all(cmd.encode())
             await self.send_table(stream, table)
