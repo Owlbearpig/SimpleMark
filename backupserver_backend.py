@@ -1,60 +1,24 @@
-import socket
-import hashlib
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.textinput import TextInput
-from kivy.app import App, async_runTouchApp
-from kivy.uix.checkbox import CheckBox
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.label import Label
-from datetime import datetime
-import sqlite3
-from pathlib import Path
 import trio
-from main import DBConnection, Device
+from dbconnection import DBConnection
+from tcpcommunication import TCPCommunication
+from custom_objects import Device
 import pickle
+import yaml
 
 
-class ServerApp(App):
-    def __init__(self, **kwargs):
-        super(ServerApp, self).__init__(**kwargs)
+class BackupAppBackend:
+    def __init__(self):
         self.db_con = DBConnection("storage.db")
-        self.server_host = "127.0.0.1"
+        self.server_host = "192.168.52.6"
         self.server_port = 12345
-        self.devices = [Device("192.168.52.9", "dev1"), ]
+        self.config = yaml.safe_load(open("config.yml"))
         # receive 4096 bytes each time
         self.buffer_size = 4096
         self.cmd_len = 128
-        SEPARATOR = "123"
+        self.devices = [Device("192.168.52.6", "server", self.config),
+                        Device("192.168.52.9", "dev1", self.config),
+                        Device("192.168.52.10", "dev2", self.config)]
         self.tasks = []
-
-    def build(self):
-        self.sm = ScreenManager()
-
-        # main screen
-        self.main_screen = Screen(name="main")
-        self.make_main_screen()
-        self.sm.add_widget(self.main_screen)
-
-        return self.sm
-
-    def on_button_press(self, instance):
-        button_text = instance.text
-        self.tasks.append(button_text)
-
-    def make_main_screen(self):
-        v_layout = BoxLayout(orientation="vertical")
-
-        upd_items_btn = Button(text="Push items")
-        upd_items_btn.bind(on_press=self.on_button_press)
-        v_layout.add_widget(upd_items_btn)
-
-        get_marks_btn = Button(text="Get marks")
-        get_marks_btn.bind(on_press=self.on_button_press)
-        v_layout.add_widget(get_marks_btn)
-
-        self.main_screen.add_widget(v_layout)
 
     async def server(self):
         while True:
@@ -101,28 +65,17 @@ class ServerApp(App):
             self.db_con.con.commit()
             # TODO Logging
 
-    async def app_func(self):
+    async def communication(self):
+        new_connection = TCPCommunication(self.db_con, self.config)
+        await new_connection.listen()
+
+    async def run(self):
         async with trio.open_nursery() as nursery:
             self.nursery = nursery
 
-            async def run_wrapper():
-                # trio needs to be set so that it'll be used for the event loop
-                await self.async_run(async_lib='trio')
-                print('App done')
-                nursery.cancel_scope.cancel()
-
-            nursery.start_soon(run_wrapper)
             nursery.start_soon(self.server)
+            nursery.start_soon(self.communication)
 
 
 if __name__ == '__main__':
-    trio.run(ServerApp().app_func)
-
-
-def md5(fname):
-    hash_md5 = hashlib.md5()
-    with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()
-
+    trio.run(BackupAppBackend().run)

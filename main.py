@@ -7,193 +7,12 @@ from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from datetime import datetime
-import sqlite3
+from dbconnection import DBConnection
+from tcpcommunication import TCPCommunication
 from pathlib import Path
+from custom_objects import User, Item, Device
 import trio
-import pickle
-
-
-def chunker(seq, size):
-    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
-
-
-class Device:
-    def __init__(self, addr, name):
-        self.addr = addr
-        self.name = name
-
-    def __str__(self):
-        return f"addr: {self.addr}, name: {self.name}"
-
-
-class TCPConnection:
-    def __init__(self, db_con, port=12345):
-        self.db_con = db_con
-        # self.host_addr = "192.168.178.29"
-        # self.host_addr = "192.168.52.9"
-        self.host_addr = "127.0.0.1"
-        self.port = port
-        self.addr_whitelist = ["127.0.0.1", "192.168.52.6", "192.168.52.9"]
-        self.devices = [Device("192.168.52.9", "dev1"), ]
-        self.cmd_len = 128
-        # receive 4096 bytes each time
-        self.buffer_size = 4096
-        SEPARATOR = "123"
-
-    async def listen(self):
-        while True:
-            await trio.sleep(0.5)
-            listeners = (await trio.open_tcp_listeners(self.port, host=self.host_addr))
-            for listener in listeners:
-                async with listener:
-                    socket_stream = await self.accept(listener)
-                    if socket_stream is not None:
-                        await self.stream_handler(socket_stream)
-
-    async def accept(self, listener):
-        stream = await listener.accept()
-        addr, port = stream.socket.getpeername()
-
-        print(f"Addr: {addr}:{port} connected")
-        if addr not in self.addr_whitelist:
-            await stream.aclose()
-            return
-        else:
-            print(f"Accepted {addr}:{port}")
-            return stream
-
-    async def stream_handler(self, stream):
-        cmd = (await stream.receive_some(self.cmd_len)).decode()
-        print("cmd:", cmd.replace("0", ""))
-
-        try:
-            if "push items" in cmd:
-                await self.update_items(stream)
-            elif "get marks" in cmd:
-                await self.send_table(stream, "marks")
-            elif "syncing marks" in cmd:
-                await self.receive_table(stream, "marks")
-            elif "syncing users" in cmd:
-                await self.receive_table(stream, "users")
-        except trio.ClosedResourceError as e:
-            print(e)
-
-    async def update_items(self, stream):
-        chunk_s = ""
-        async for chunk in stream:
-            chunk_s += chunk.decode()
-
-        self.db_con.truncate_table("items")
-
-        for line in chunk_s.split("\n"):
-            cols = self.db_con.table_cols["items"]
-            values = line.split("__")
-            if len(values) == 4:
-                self.db_con.insert_into("items", values, cols)
-
-    async def receive_table(self, stream, table):
-        async with stream:
-            received_data = b""
-            async for chunk in stream:
-                received_data += chunk
-
-            marks = pickle.loads(received_data)
-
-        cols = self.db_con.table_cols[table]
-        for mark in marks:
-            self.db_con.update_table(table, mark, cols, commit_now=False)
-        self.db_con.con.commit()
-
-    async def sync_table(self, table):
-        for dev in self.devices:
-            print(f"syncing {table}, dev: {dev}")
-            cmd = f"sync {table}".zfill(self.cmd_len // 2)
-            stream = await trio.open_tcp_stream(dev.addr, self.port)
-            await stream.send_all(cmd.encode())
-            await self.send_table(stream, table)
-
-    async def send_table(self, stream, table):
-        entries = self.db_con.select_from(table)
-        async with stream:
-            data = pickle.dumps(entries)
-            for chunk in chunker(data, self.buffer_size):
-                await stream.send_all(chunk)
-
-
-class DBConnection:
-    def __init__(self, db=Path("Appdata") / "database.db"):
-        self.con = sqlite3.connect(db)
-        self.cur = self.con.cursor()
-        self.table_cols = {"marks": ("time", "qty", "name", "price", "item_id", "user_id"),
-                           "items": ("name", "price", "category", "item_id"),
-                           "users": ("username", "user_id"),
-                           }
-
-    def insert_into(self, table, values, cols, multi_insert=False):
-        parameters = ", ".join(["?"] * len(cols))
-
-        sql = f"INSERT INTO {table} {cols} VALUES ({parameters})"
-
-        if multi_insert:
-            self.cur.executemany(sql, values)
-        else:
-            self.cur.execute(sql, values)
-
-        self.con.commit()
-
-    def select_from(self, table):
-        self.cur.execute(f"SELECT * FROM {table}")
-        result = self.cur.fetchall()
-
-        return result
-
-    def truncate_table(self, table):
-        # deletes content of table...
-        self.cur.execute(f"DELETE FROM {table}")
-        self.con.commit()
-
-    def create_table(self, table, cols):
-        try:
-            self.cur.execute(f"CREATE TABLE {table}{cols}")
-        except sqlite3.OperationalError as e:
-            print(e)
-
-    def update_table(self, table, values, cols, commit_now=True):
-        id_expr = ""
-        if table == "marks":
-            id_expr = f"time = '{values[0]}'"
-        if table == "users":
-            id_expr = f"user_id = '{values[1]}'"
-        parameters = ", ".join(["?"] * len(cols))
-        sql = f"INSERT INTO {table} {cols} SELECT {parameters} " \
-              f"WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE {id_expr})"
-
-        self.cur.execute(sql, values)
-        if commit_now:
-            self.con.commit()
-
-
-class User:
-    def __init__(self, username, user_id):
-        self.username = username
-        self.user_id = user_id
-
-    def __str__(self):
-        return f"{self.username}"
-
-    def __repr__(self):
-        return self.__str__()
-
-
-class Item:
-    def __init__(self, name, price, category, item_id):
-        self.name = name
-        self.price = price
-        self.category = category
-        self.item_id = item_id
-
-    def __repr__(self):
-        return self.name + f"\n{float(self.price):.2f} €"
+import yaml
 
 
 class NewUserLayout(GridLayout):
@@ -230,8 +49,10 @@ class HiMark(App):
         self.current_status = ""
         self.db_con = DBConnection()
         self.tcp_queue = []
-        self.unsynced_marks = False
-        self.unsynced_users = False
+        self.config = yaml.safe_load(open("config.yml"))
+        self.devices = [Device("192.168.52.6", "backup", self.config),
+                        Device("192.168.52.9", "dev1", self.config),
+                        Device("192.168.52.10", "dev2", self.config)]
 
     def check_dir(self):
         p = Path("Appdata") / "Marks"
@@ -359,7 +180,12 @@ class HiMark(App):
 
         self.users_screen.clear_widgets()
         self.update_users_screen()
-        self.unsynced_users = True
+
+        for dev in self.devices:
+            if dev.is_host:
+                continue
+            else:
+                dev.synced_users = False
 
     def settings_screen(self):
         settings_screen = Screen(name="settings")
@@ -415,7 +241,11 @@ class HiMark(App):
         with open(f"Appdata/Marks/{int(user_id)}", "a") as file:
             file.write(entry + "\n")
 
-        self.unsynced_marks = True
+        for dev in self.devices:
+            if dev.is_host:
+                continue
+            else:
+                dev.synced_marks = False
 
     def on_button_press(self, instance):
         def goto_main():
@@ -504,27 +334,24 @@ class HiMark(App):
                 nursery.cancel_scope.cancel()
 
             nursery.start_soon(run_wrapper)
-            nursery.start_soon(self.communication_server)
+            nursery.start_soon(self.communication)
             nursery.start_soon(self.sync_loop)
 
-    async def communication_server(self):
-        new_connection = TCPConnection(self.db_con)
+    async def communication(self):
+        new_connection = TCPCommunication(self.db_con, self.devices)
         await new_connection.listen()
 
     async def sync_loop(self):
         while True:
             await trio.sleep(10)
-            try:
-                if self.unsynced_marks or self.unsynced_users:
-                    new_connection = TCPConnection(self.db_con)
-                    if self.unsynced_marks:
-                        await new_connection.sync_table("marks")
-                        self.unsynced_marks = False
-                    if self.unsynced_users:
-                        await new_connection.sync_table("users")
-                        self.unsynced_users = False
-            except Exception as e:
-                print(e)
+            for dev in self.devices:
+                new_connection = TCPCommunication(self.db_con, self.devices)
+                if not dev.synced_marks:
+                    ret = await new_connection.sync_table(dev, "marks")
+                    dev.synced_marks = not bool(ret)
+                if not dev.synced_users:
+                    ret = await new_connection.sync_table(dev, "users")
+                    dev.synced_users = not bool(ret)
 
 
 if __name__ == '__main__':
