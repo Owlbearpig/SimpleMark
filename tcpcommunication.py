@@ -93,7 +93,7 @@ class TCPCommunication:
     async def sync_table(self, dev, table):
         try:
             print(f"sending {table} to {dev}")
-            cmd = f"receive {table}".zfill(self.cmd_len // 2)
+            cmd = f"receive {table}".zfill(self.cmd_len)
             stream = await trio.open_tcp_stream(dev.addr, self.port)
             await stream.send_all(cmd.encode())
             await self.send_table(stream, table)
