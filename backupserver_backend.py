@@ -9,9 +9,9 @@ import yaml
 class BackupAppBackend:
     def __init__(self):
         self.db_con = DBConnection("storage.db")
-        self.server_host = "192.168.52.6"
         self.server_port = 12345
         self.config = yaml.safe_load(open("config.yml"))
+        self.server_host = self.config["host_address"]
         # receive 4096 bytes each time
         self.buffer_size = 4096
         self.cmd_len = 128

@@ -1,5 +1,6 @@
 import trio
 import pickle
+import yaml
 
 
 def chunker(seq, size):
@@ -12,7 +13,8 @@ class TCPCommunication:
         self.devices = devices
         # self.host_addr = "192.168.178.29"
         # self.host_addr = "192.168.52.9"
-        self.host_addr = "192.168.52.6"
+        self.config = yaml.safe_load(open("config.yml"))
+        self.host_addr = self.config["host_address"]
         self.port = port
         self.cmd_len = 128
         # receive 4096 bytes each time
