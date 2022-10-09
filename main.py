@@ -380,8 +380,8 @@ class HiMark(App):
                 nursery.cancel_scope.cancel()
 
             nursery.start_soon(run_wrapper)
-            nursery.start_soon(self.tcp_comm.listen)
             nursery.start_soon(self.sync_loop)
+            nursery.start_soon(self.tcp_comm.listen)
 
     async def sync_loop(self):
         sync_interval = 30

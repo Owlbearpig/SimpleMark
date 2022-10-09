@@ -27,14 +27,22 @@ class TCPCommunication:
         return stream
 
     async def listen(self):
+        retries, timeout = 0, 0
         while True:
             await trio.sleep(1)
-            listeners = (await trio.open_tcp_listeners(host=self.host_addr, port=self.port))
-            for listener in listeners:
-                async with listener:
-                    socket_stream, dev = await self.accept(listener)
-                    if socket_stream is not None:
-                        await self.stream_handler(socket_stream, dev)
+            try:
+                await trio.sleep(timeout)
+                listeners = (await trio.open_tcp_listeners(host=self.host_addr, port=self.port))
+                for listener in listeners:
+                    async with listener:
+                        socket_stream, dev = await self.accept(listener)
+                        if socket_stream is not None:
+                            await self.stream_handler(socket_stream, dev)
+                retries, timeout = 0, 0
+            except Exception as e:
+                print(e)
+                timeout += 30*2**retries
+                retries += 1
 
     async def accept(self, listener):
         # check if connection is from known device then reset timeouts
