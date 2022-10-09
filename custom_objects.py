@@ -9,7 +9,7 @@ class Device:
         self.timeouts = 0
 
     def __str__(self):
-        return f"addr: {self.addr}, name: {self.name}"
+        return f"{self.addr}, {self.name}"
 
     def reset_timeout(self):
         self.timeout = 0

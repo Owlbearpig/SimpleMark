@@ -35,14 +35,14 @@ class BackupAppBackend:
                     try:
                         await self.task_handler(dev, task)
                     except Exception as e:
-                        print("ehm no connection...\n", e)
+                        print("ehm no connection...", e)
                     finally:
                         self.tasks.remove(task)
 
     async def task_handler(self, dev, task):
-        if "Push items" in task:
+        if "push items" in task:
             await self.push_items(dev)
-        elif "Request tables" in task:
+        elif "request tables" in task:
             await self.request_table(dev, "marks")
             await self.request_table(dev, "users")
             print("tables updated")
@@ -58,16 +58,16 @@ class BackupAppBackend:
                 # iterate over lambda? until reaching b""
                 for chunk in iter(lambda: file.read(self.buffer_size), b""):
                     await stream.send_all(chunk)
+        print(f"pushed items to {dev}")
 
     async def request_table(self, dev, table):
         stream = await self.tcp_comm.open_stream(dev)
         if stream is None:
             return
-        async with stream:
-            cmd = format_cmd(f"send {table}")
-            await stream.send_all(cmd)
+        cmd = format_cmd(f"send {table}")
+        await stream.send_all(cmd)
 
-            await self.tcp_comm.receive_table(stream, dev, table)
+        await self.tcp_comm.stream_handler(stream, dev)
         # TODO Logging
 
     async def run(self):

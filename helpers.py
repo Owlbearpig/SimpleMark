@@ -4,6 +4,7 @@ config = yaml.safe_load(open("config.yml"))
 
 
 def format_cmd(cmd_s):
+    cmd_s = str(cmd_s).lower()
     cmd = f"{cmd_s}".zfill(config["cmd_len"])
     return cmd.encode()
 

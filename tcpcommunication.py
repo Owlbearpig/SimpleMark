@@ -39,7 +39,7 @@ class TCPCommunication:
         stream = await listener.accept()
         addr, port = stream.socket.getpeername()
 
-        print(f"Addr: {addr}:{port} connected")
+        print(f"{addr}:{port} connected")
         connected_dev = None
         for dev in self.devices:
             if dev.addr == addr:
@@ -56,7 +56,7 @@ class TCPCommunication:
     async def stream_handler(self, stream, dev):
         cmd_bytes = await stream.receive_some(self.cmd_len)
         cmd = cmd_bytes.decode()
-        print("cmd:", cmd.replace("0", ""))
+        print("Incoming cmd:", cmd.replace("0", ""))
 
         try:
             if "push items" in cmd:

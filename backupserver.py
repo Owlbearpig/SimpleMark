@@ -22,7 +22,7 @@ class BackupAppGUI(App, BackupAppBackend):
 
     def on_button_press(self, instance):
         button_text = instance.text
-        self.tasks.append(button_text)
+        self.tasks.append(button_text.lower())
 
     def make_main_screen(self):
         v_layout = BoxLayout(orientation="vertical")
@@ -50,8 +50,6 @@ class BackupAppGUI(App, BackupAppBackend):
             nursery.start_soon(run_wrapper)
             nursery.start_soon(self.tcp_comm.listen)
             nursery.start_soon(self.server)
-
-
 
 
 if __name__ == '__main__':
