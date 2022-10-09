@@ -104,6 +104,15 @@ class HiMark(App):
 
         return category_screen
 
+    def update_store_screen(self):
+        self.items = self.get_items()
+
+        for store_screen in self.store_screens:
+            store_screen.clear_widgets()
+            category = store_screen.name.split("_")[0]
+            store_layout = self.make_store_screen(category)
+            store_screen.add_widget(store_layout)
+
     def make_store_screen(self, category):
         def change_amount(instance):
             cur_amount = int(qty_field.text)
@@ -264,6 +273,11 @@ class HiMark(App):
             else:
                 dev.synced_marks = False
 
+    def on_category_select(self):
+        if "update_items" in self.tcp_queue:
+            self.tcp_queue = []  # assuming there's never anything else in
+            self.update_store_screen()
+
     def on_button_press(self, instance):
         def goto_main():
             self.sm.transition.direction = "right"
@@ -298,6 +312,7 @@ class HiMark(App):
             goto_categories()
             self.select_user(instance.ids["user_id"])
         elif button_text in self.categories:
+            self.on_category_select()
             goto_items(button_text)
         elif any([item.name in button_text for item in self.items]):
             self.buy_item(self.selected_user, instance.ids["item_id"])
@@ -335,11 +350,17 @@ class HiMark(App):
         self.sm.add_widget(category_screen)
 
         # available items screen
+        self.store_screens = []
         for category in self.categories:
             store_screen = Screen(name=f"{category}_store_screen")
-            store_layout = self.make_store_screen(category)
-            store_screen.add_widget(store_layout)
+            self.store_screens.append(store_screen)
+
+        self.update_store_screen()
+
+        for store_screen in self.store_screens:
             self.sm.add_widget(store_screen)
+
+
 
         return self.sm
 
