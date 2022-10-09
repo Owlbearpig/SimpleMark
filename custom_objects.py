@@ -5,10 +5,15 @@ class Device:
         self.synced_marks = True
         self.synced_users = True
         self.is_host = addr == config["host_address"]
-        self.connection_fails = 0
+        self.timeout = 0
+        self.timeouts = 0
 
     def __str__(self):
         return f"addr: {self.addr}, name: {self.name}"
+
+    def reset_timeout(self):
+        self.timeout = 0
+        self.timeouts = 0
 
 
 class User:

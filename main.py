@@ -43,16 +43,19 @@ class StoreLayout(GridLayout):
 class HiMark(App):
     def __init__(self, **kwargs):
         super(HiMark, self).__init__(**kwargs)
+        self.config = yaml.safe_load(open("config.yml"))
+
+        self.devices = [Device("192.168.52.6", "backup", self.config),
+                        Device("192.168.52.9", "dev1", self.config),
+                        Device("192.168.52.10", "dev2", self.config)]
+
         self.selected_user = None
         self.qty_fields = {}
         # text to be displayed on users screen
         self.current_status = ""
         self.db_con = DBConnection()
+        self.tcp_comm = TCPCommunication(self.db_con, self.devices)
         self.tcp_queue = []
-        self.config = yaml.safe_load(open("config.yml"))
-        self.devices = [Device("192.168.52.6", "backup", self.config),
-                        Device("192.168.52.9", "dev1", self.config),
-                        Device("192.168.52.10", "dev2", self.config)]
 
     def check_dir(self):
         p = Path("Appdata") / "Marks"
@@ -117,11 +120,11 @@ class HiMark(App):
         for i in range(len(sel_items) // h_len + 1 * ((len(sel_items) % h_len) != 0)):
             items_grid.append(sel_items[i * h_len:(i + 1) * h_len])
 
-        increment_button = Button(text="+", font_size=110, halign='center')
-        decrement_button = Button(text="-", font_size=110, halign='center')
+        increment_button = Button(text="+", font_size=110, halign="center")
+        decrement_button = Button(text="-", font_size=110, halign="center")
         increment_button.bind(on_press=change_amount)
         decrement_button.bind(on_press=change_amount)
-        qty_field = TextInput(multiline=False, readonly=True, font_size=80, text="1", halign='center')
+        qty_field = TextInput(multiline=False, readonly=True, font_size=80, text="1", halign="center")
         qty_field.ids["category"] = category
         self.qty_fields[category] = qty_field
 
@@ -210,6 +213,17 @@ class HiMark(App):
         row2.add_widget(update_items_btn)
         v_layout.add_widget(row2)
 
+        row3 = GridLayout()
+        row3.cols = 2
+        self.ip_addr_field = TextInput(multiline=False, readonly=False, font_size=80, text="1", halign="left")
+        self.ip_addr_field.text = self.config["host_address"]
+        row3.add_widget(self.ip_addr_field)
+        update_ip_btn = Button(text="Update address")
+        update_ip_btn.bind(on_press=self.on_button_press)
+        row3.add_widget(update_ip_btn)
+
+        v_layout.add_widget(row3)
+
         go_back_btn = Button(text="Go back", font_size=55)
         go_back_btn.bind(on_press=self.on_button_press)
         v_layout.add_widget(go_back_btn)
@@ -290,6 +304,9 @@ class HiMark(App):
             goto_main()
         elif button_text == "update items":
             self.tcp_queue.append("update_items")
+        elif button_text == "Update address":
+            self.config["host_address"] = self.ip_addr_field.text
+            yaml.dump(self.config, open("config.yml", "w"))
 
     def build(self):
         self.check_dir()
@@ -337,24 +354,35 @@ class HiMark(App):
                 nursery.cancel_scope.cancel()
 
             nursery.start_soon(run_wrapper)
-            nursery.start_soon(self.communication)
+            nursery.start_soon(self.tcp_comm.listen)
             nursery.start_soon(self.sync_loop)
 
-    async def communication(self):
-        new_connection = TCPCommunication(self.db_con, self.devices)
-        await new_connection.listen()
-
     async def sync_loop(self):
+        sync_interval = 30
         while True:
-            await trio.sleep(10)
+            await trio.sleep(sync_interval)
             for dev in self.devices:
-                new_connection = TCPCommunication(self.db_con, self.devices)
-                if not dev.synced_marks:
-                    ret = await new_connection.sync_table(dev, "marks")
-                    dev.synced_marks = not bool(ret)
-                if not dev.synced_users:
-                    ret = await new_connection.sync_table(dev, "users")
-                    dev.synced_users = not bool(ret)
+                if dev.is_host:
+                    continue
+                await self.sync_dev(dev, sync_interval)
+
+    async def sync_dev(self, dev, interval):
+        if dev.timeout:
+            dev.timeout -= interval
+            return
+        stream = None
+        if not dev.synced_marks:
+            ret = await self.tcp_comm.send_table(stream, "marks", dev)
+            dev.synced_marks = not bool(ret)
+        if not dev.synced_users:
+            ret = await self.tcp_comm.send_table(stream, "users", dev)
+            dev.synced_users = not bool(ret)
+
+        if (not dev.synced_users) or (not dev.synced_marks):
+            dev.timeout = interval * 2 ** dev.timeouts
+            dev.timeouts += 1
+        else:
+            dev.timeouts = 0
 
 
 if __name__ == '__main__':

@@ -31,7 +31,7 @@ class BackupAppGUI(App, BackupAppBackend):
         upd_items_btn.bind(on_press=self.on_button_press)
         v_layout.add_widget(upd_items_btn)
 
-        get_marks_btn = Button(text="Get marks")
+        get_marks_btn = Button(text="Request tables")
         get_marks_btn.bind(on_press=self.on_button_press)
         v_layout.add_widget(get_marks_btn)
 
@@ -48,8 +48,10 @@ class BackupAppGUI(App, BackupAppBackend):
                 nursery.cancel_scope.cancel()
 
             nursery.start_soon(run_wrapper)
+            nursery.start_soon(self.tcp_comm.listen)
             nursery.start_soon(self.server)
-            nursery.start_soon(self.communication)
+
+
 
 
 if __name__ == '__main__':
