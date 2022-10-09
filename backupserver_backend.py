@@ -28,16 +28,17 @@ class BackupAppBackend:
     async def server(self):
         while True:
             await trio.sleep(0.1)
-            for dev in self.devices:
-                if dev.is_host:
-                    continue
-                for task in self.tasks:
+            for task in self.tasks:
+                for dev in self.devices:
+                    if dev.is_host:
+                        continue
+
                     try:
                         await self.task_handler(dev, task)
                     except Exception as e:
-                        print("ehm no connection...", e)
-                    finally:
-                        self.tasks.remove(task)
+                        print(f"ehm no connection to {dev}", e)
+
+                self.tasks.remove(task)
 
     async def task_handler(self, dev, task):
         if "push items" in task:

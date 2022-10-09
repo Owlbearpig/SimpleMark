@@ -76,8 +76,9 @@ class TCPCommunication:
         chunk_s = ""
         async for chunk in stream:
             chunk_s += chunk.decode()
+
         self.db_con.truncate_table("items")
-        print(chunk_s)
+
         for line in chunk_s.split("\n"):
             cols = self.db_con.table_cols["items"]
             values = line.split("__")
