@@ -33,6 +33,7 @@ class TCPCommunication:
             try:
                 await trio.sleep(timeout)
                 listeners = (await trio.open_tcp_listeners(host=self.host_addr, port=self.port))
+                print(f"Listening on {self.host_addr}:{self.port}")
                 for listener in listeners:
                     async with listener:
                         socket_stream, dev = await self.accept(listener)
