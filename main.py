@@ -43,11 +43,11 @@ class StoreLayout(GridLayout):
 class HiMark(App):
     def __init__(self, **kwargs):
         super(HiMark, self).__init__(**kwargs)
-        self.config = yaml.safe_load(open("config.yml"))
+        self.tcp_config = yaml.safe_load(open("config.yml"))
 
-        self.devices = [Device("192.168.52.6", "backup", self.config),
-                        Device("192.168.52.9", "dev1", self.config),
-                        Device("192.168.52.10", "dev2", self.config)]
+        self.devices = [Device("192.168.52.6", "backup", self.tcp_config),
+                        Device("192.168.52.9", "dev1", self.tcp_config),
+                        Device("192.168.52.10", "dev2", self.tcp_config)]
 
         self.selected_user = None
         self.qty_fields = {}
@@ -216,7 +216,7 @@ class HiMark(App):
         row3 = GridLayout()
         row3.cols = 2
         self.ip_addr_field = TextInput(multiline=False, readonly=False, font_size=80, text="1", halign="left")
-        self.ip_addr_field.text = self.config["host_address"]
+        self.ip_addr_field.text = self.tcp_config["host_address"]
         row3.add_widget(self.ip_addr_field)
         update_ip_btn = Button(text="Update address")
         update_ip_btn.bind(on_press=self.on_button_press)
@@ -305,8 +305,8 @@ class HiMark(App):
         elif button_text == "update items":
             self.tcp_queue.append("update_items")
         elif button_text == "Update address":
-            self.config["host_address"] = self.ip_addr_field.text
-            yaml.dump(self.config, open("config.yml", "w"))
+            self.tcp_config["host_address"] = self.ip_addr_field.text
+            yaml.dump(self.tcp_config, open("config.yml", "w"))
 
     def build(self):
         self.check_dir()
