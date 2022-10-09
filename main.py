@@ -224,7 +224,7 @@ class HiMark(App):
 
         row3 = GridLayout()
         row3.cols = 2
-        self.ip_addr_field = TextInput(multiline=False, readonly=False, font_size=80, text="1", halign="left")
+        self.ip_addr_field = TextInput(multiline=False, readonly=False, font_size=40, text="1", halign="left")
         self.ip_addr_field.text = self.tcp_config["host_address"]
         row3.add_widget(self.ip_addr_field)
         update_ip_btn = Button(text="Update address")
@@ -280,6 +280,11 @@ class HiMark(App):
 
     def on_button_press(self, instance):
         def goto_main():
+            if self.tcp_comm.received_users:
+                self.users_screen.clear_widgets()
+                self.update_users_screen()
+                self.tcp_comm.received_users = False
+
             self.sm.transition.direction = "right"
             self.sm.current = "users"
             self.selected_user = None

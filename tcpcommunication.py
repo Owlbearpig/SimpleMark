@@ -15,6 +15,7 @@ class TCPCommunication:
         self.cmd_len = self.config["cmd_len"]
         self.buffer_size = self.config["buffer_size"]
         self.received_items = False
+        self.received_users = False
 
     async def open_stream(self, dev):
         try:
@@ -101,6 +102,9 @@ class TCPCommunication:
         for row in table_data:
             self.db_con.update_table(table, row, cols, commit_now=False)
         self.db_con.con.commit()
+
+        if table == "users":
+            self.received_users = True
 
     async def send_table(self, stream, table, dev):
         try:
