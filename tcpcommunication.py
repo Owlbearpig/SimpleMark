@@ -102,7 +102,7 @@ class TCPCommunication:
     async def send_table(self, stream, table, dev):
         try:
             if stream is None:
-                stream = self.open_stream(dev)
+                stream = await self.open_stream(dev)
 
             print(f"Sending {table} to {dev}")
             cmd = format_cmd(f"receive {table}")
