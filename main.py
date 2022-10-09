@@ -274,8 +274,8 @@ class HiMark(App):
                 dev.synced_marks = False
 
     def on_category_select(self):
-        if "update_items" in self.tcp_queue:
-            self.tcp_queue = []  # assuming there's never anything else in
+        if self.tcp_comm.received_items:
+            self.tcp_comm.received_items = False
             self.update_store_screen()
 
     def on_button_press(self, instance):

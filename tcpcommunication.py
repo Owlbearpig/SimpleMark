@@ -14,6 +14,7 @@ class TCPCommunication:
             self.port = self.config["server_port"]
         self.cmd_len = self.config["cmd_len"]
         self.buffer_size = self.config["buffer_size"]
+        self.received_items = False
 
     async def open_stream(self, dev):
         try:
@@ -84,6 +85,8 @@ class TCPCommunication:
             values = line.split("__")
             if len(values) == 4:
                 self.db_con.insert_into("items", values, cols)
+        self.received_items = True
+        print("received new items")
 
     async def receive_table(self, stream, table, dev):
         print(f"Receiving {table} from {dev}")
