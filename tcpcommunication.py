@@ -85,6 +85,7 @@ class TCPCommunication:
             if len(values) == 4:
                 self.db_con.insert_into("items", values, cols)
 
+
     async def receive_table(self, stream, table, dev):
         print(f"Receiving {table} from {dev}")
         async with stream:
