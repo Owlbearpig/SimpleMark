@@ -6,6 +6,8 @@ from kivy.uix.checkbox import CheckBox
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
+from kivy.uix.scrollview import ScrollView
+from kivy.core.window import Window
 from datetime import datetime
 from dbconnection import DBConnection
 from tcpcommunication import TCPCommunication
@@ -13,6 +15,9 @@ from pathlib import Path
 from custom_objects import User, Item, Device
 import trio
 import yaml
+
+
+
 
 
 class NewUserLayout(GridLayout):
@@ -33,11 +38,6 @@ class NewUserLayout(GridLayout):
 
         self.back = Button(text="Go back", font_size=40)
         self.add_widget(self.back)
-
-
-class StoreLayout(GridLayout):
-    def __init__(self, **kwargs):
-        super(StoreLayout, self).__init__(**kwargs)
 
 
 class HiMark(App):
@@ -91,14 +91,19 @@ class HiMark(App):
         self.categories = list(set([item.category for item in self.items]))
 
         h_layout = BoxLayout(orientation="vertical")
-        go_back_btn = Button(text="Go back", font_size=55)
-        go_back_btn.bind(on_press=self.on_button_press)
         layout = BoxLayout(orientation="horizontal")
         for category in self.categories:
             btn = Button(text=category, font_size=55)
             btn.bind(on_press=self.on_button_press)
             layout.add_widget(btn)
         h_layout.add_widget(layout)
+
+        btn = Button(text="Purchase history", font_size=55)
+        btn.bind(on_press=self.on_button_press)
+        h_layout.add_widget(btn)
+
+        go_back_btn = Button(text="Go back", font_size=55)
+        go_back_btn.bind(on_press=self.on_button_press)
         h_layout.add_widget(go_back_btn)
         category_screen.add_widget(h_layout)
 
@@ -185,6 +190,23 @@ class HiMark(App):
             v_layout.add_widget(h_layout)
 
         self.users_screen.add_widget(v_layout)
+
+    def purchase_history_screen_layout(self):
+        marks = self.db_con.select_from("marks")
+        user_id_col_idx = self.db_con.table_cols["marks"].index("user_id")
+        cur_user_marks = [mark for mark in marks if mark[user_id_col_idx] == self.selected_user.user_id]
+        layout = GridLayout(cols=1, spacing=10, size_hint_y=None)
+        layout.bind(minimum_height = layout.setter("height"))
+
+        for mark in cur_user_marks:
+            button = Button(text=str(mark), size_hint_y=None, height=40)
+            layout.add_widget(button)
+
+        sv = ScrollView(size_hint=(1, None), size=(Window.width, Window.height))
+        sv.add_widget(layout)
+        # TODO add delete buttons -> two cols, and back button.
+        #  After pressing delete window has to refresh somehow.
+        return sv
 
     def on_create_user(self):
         username = self.new_user_layout.username_input.text
@@ -278,6 +300,11 @@ class HiMark(App):
             self.tcp_comm.received_items = False
             self.update_store_screen()
 
+    def on_purchase_history(self):
+        self.purchase_history_screen.clear_widgets()
+        layout = self.purchase_history_screen_layout()
+        self.purchase_history_screen.add_widget(layout)
+
     def on_button_press(self, instance):
         def goto_main():
             if self.tcp_comm.received_users:
@@ -299,6 +326,10 @@ class HiMark(App):
             self.sm.transition.direction = "up"
             self.sm.current = "categories"
 
+        def goto_purchase_history():
+            self.sm.transition.direction = "down"
+            self.sm.current = "purchase_history"
+
         button_text = instance.text
         if button_text == "Add user":
             if self.status_field.text == "1234":
@@ -319,6 +350,9 @@ class HiMark(App):
         elif button_text in self.categories:
             self.on_category_select()
             goto_items(button_text)
+        elif button_text == "Purchase history":
+            self.on_purchase_history()
+            goto_purchase_history()
         elif any([item.name in button_text for item in self.items]):
             self.buy_item(self.selected_user, instance.ids["item_id"])
             goto_main()
@@ -333,12 +367,12 @@ class HiMark(App):
 
         self.sm = ScreenManager()
 
-        # main/initial screen, select user or add user
+        # setup main/initial screen, select user or add user
         self.users_screen = Screen(name="users")
         self.update_users_screen()
         self.sm.add_widget(self.users_screen)
 
-        # add user screen
+        # setup add user screen
         new_user_screen = Screen(name="new_user")
         self.new_user_layout = NewUserLayout()
         self.new_user_layout.back.bind(on_press=self.on_button_press)
@@ -346,26 +380,28 @@ class HiMark(App):
         new_user_screen.add_widget(self.new_user_layout)
         self.sm.add_widget(new_user_screen)
 
-        # settings screen
+        # purchase history screen
+        self.purchase_history_screen = Screen(name="purchase_history")
+        self.sm.add_widget(self.purchase_history_screen)
+
+        # setup settings screen
         settings_screen = self.settings_screen()
         self.sm.add_widget(settings_screen)
 
-        # categories
+        # setup categories
         category_screen = self.item_category_screen()
         self.sm.add_widget(category_screen)
 
-        # available items screen
+        # setup available items screen; one for each category
         self.store_screens = []
         for category in self.categories:
             store_screen = Screen(name=f"{category}_store_screen")
             self.store_screens.append(store_screen)
 
-        self.update_store_screen()
-
         for store_screen in self.store_screens:
             self.sm.add_widget(store_screen)
 
-
+        self.update_store_screen()
 
         return self.sm
 

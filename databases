@@ -16,4 +16,7 @@ marks: stored on dev1 and dev2, synced(tables are supposed to be equal) to all d
 - check file transfers with checksums, only remove flag if returned checksum is equal,
 to confirm success. What about fails?
 
-(- server ui, with log window)
+(- server ui)
+
+- use kivy config
+- Add kivy.logging to file, instead parallel to printing exceptions
