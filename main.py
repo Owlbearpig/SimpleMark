@@ -17,9 +17,6 @@ import trio
 import yaml
 
 
-
-
-
 class NewUserLayout(GridLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -192,20 +189,33 @@ class HiMark(App):
         self.users_screen.add_widget(v_layout)
 
     def purchase_history_screen_layout(self):
-        marks = self.db_con.select_from("marks")
-        user_id_col_idx = self.db_con.table_cols["marks"].index("user_id")
-        cur_user_marks = [mark for mark in marks if mark[user_id_col_idx] == self.selected_user.user_id]
+        marks_table = self.db_con.select_from("marks")
+        marks = [{a:b for a, b in zip(self.db_con.table_cols["marks"], mark_tuple)} for mark_tuple in marks_table]
+        cur_user_marks = [mark for mark in marks if mark["user_id"] == self.selected_user.user_id]
         layout = GridLayout(cols=1, spacing=10, size_hint_y=None)
-        layout.bind(minimum_height = layout.setter("height"))
+        layout.bind(minimum_height=layout.setter("height"))
 
         for mark in cur_user_marks:
-            button = Button(text=str(mark), size_hint_y=None, height=40)
-            layout.add_widget(button)
+            if mark["was_deleted"]:
+                continue
+
+            mark_vals = [str(val) for val in mark.values()]
+            line = GridLayout(cols=2, spacing=1, size_hint_y=None)
+            mark_text = Label(text=" ".join(mark_vals), height=40, size_hint_y=None)
+            line.add_widget(mark_text)
+
+            remove_mark_btn = Button(text="Remove", height=40, size_hint_y=None, size_hint_x=None)
+            remove_mark_btn.bind(on_press=self.on_button_press)
+            remove_mark_btn.ids["time"] = mark["time"]
+
+            line.add_widget(remove_mark_btn)
+
+            layout.add_widget(line)
 
         sv = ScrollView(size_hint=(1, None), size=(Window.width, Window.height))
         sv.add_widget(layout)
-        # TODO add delete buttons -> two cols, and back button.
-        #  After pressing delete window has to refresh somehow.
+
+        # TODO add back button, integrate with sync. Sync flag?
         return sv
 
     def on_create_user(self):
@@ -277,7 +287,7 @@ class HiMark(App):
                 now, price = str(datetime.now()), str(item.price)
                 qty = self.qty_fields[item.category].text
 
-                vals = (now, qty, item.name, price, item_id, user_id)
+                vals = (now, qty, item.name, price, item_id, user_id, "0")
                 cols = self.db_con.table_cols["marks"]
                 self.db_con.insert_into("marks", vals, cols)
 
@@ -294,6 +304,11 @@ class HiMark(App):
                 continue
             else:
                 dev.synced_marks = False
+
+    def remove_mark(self, instance):
+        mark_time = instance.ids["time"]
+        self.db_con.update_record("marks", "1", "was_deleted", mark_time)
+        self.on_purchase_history()
 
     def on_category_select(self):
         if self.tcp_comm.received_items:
@@ -361,6 +376,8 @@ class HiMark(App):
         elif button_text == "Update address":
             self.tcp_config["host_address"] = self.ip_addr_field.text
             yaml.dump(self.tcp_config, open("config.yml", "w"))
+        elif "time" in instance.ids.keys():
+            self.remove_mark(instance)
 
     def build(self):
         self.check_dir()

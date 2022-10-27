@@ -1,3 +1,5 @@
+
+
 class Device:
     def __init__(self, addr, name, config):
         self.addr = addr

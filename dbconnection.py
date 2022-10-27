@@ -6,7 +6,7 @@ class DBConnection:
     def __init__(self, db=Path("Appdata") / "database.db"):
         self.con = sqlite3.connect(db)
         self.cur = self.con.cursor()
-        self.table_cols = {"marks": ("time", "qty", "name", "price", "item_id", "user_id"),
+        self.table_cols = {"marks": ("time", "qty", "name", "price", "item_id", "user_id", "was_deleted"),
                            "items": ("name", "price", "category", "item_id"),
                            "users": ("username", "user_id"),
                            }
@@ -39,6 +39,15 @@ class DBConnection:
             self.cur.execute(f"CREATE TABLE {table}{cols}")
         except sqlite3.OperationalError as e:
             print(e)
+
+    def update_record(self, table, new_value, col, id_val):
+        id_expr = ""
+        if table == "marks":
+            id_expr = f"time = '{id_val}'"
+        sql = f"UPDATE {table} SET {col} = ? WHERE {id_expr}"
+
+        self.cur.execute(sql, new_value)
+        self.con.commit()
 
     def update_table(self, table, values, cols, commit_now=True):
         id_expr = ""
