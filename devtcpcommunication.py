@@ -72,6 +72,8 @@ class DevTCPCommunication:
 
     async def stream_handler(self, stream, dev):
         cmd_bytes = await stream.receive_some(self.cmd_len)
+        if cmd_bytes == b"":
+            return
         cmd = cmd_bytes.decode().replace("0", "")
         Logger.debug(f"Incoming cmd: {cmd}")
 
@@ -86,8 +88,15 @@ class DevTCPCommunication:
                 await self.receive_table(stream, "marks", dev)
             elif "receive users" in cmd:
                 await self.receive_table(stream, "users", dev)
+            elif "reset marks" in cmd:
+                await self.reset_marks_table()
         except trio.ClosedResourceError:
             Logger.debug("Incoming stream closed, returning")
+
+    async def reset_marks_table(self):
+        Logger.debug("Truncating marks")
+        self.db_con.truncate_table("marks")
+        Logger.debug("Truncated marks")
 
     async def update_items(self, stream):
         chunk_s = ""
@@ -116,7 +125,7 @@ class DevTCPCommunication:
         cols = self.db_con.table_cols[table]
         for row in table_data:
             # if row was deleted and table == marks then force update of the row in table with id == time
-            if int(row[6]):  # was deleted flag
+            if (table == "marks") and int(row[6]):  # was deleted flag
                 self.db_con.update_record(table, row, cols, row[0], commit_now=False)
             self.db_con.update_table(table, row, cols, commit_now=False)
         self.db_con.con.commit()

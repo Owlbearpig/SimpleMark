@@ -29,11 +29,10 @@ class BackupAppBackend:
                 for dev in self.devices:
                     if dev.is_host:
                         continue
-
                     try:
                         await self.task_handler(dev, task)
                     except Exception as e:
-                        print(f"ehm no connection to {dev}", e)
+                        print(f"No connection to {dev}", e)
 
                 self.tasks.remove(task)
 
@@ -41,9 +40,20 @@ class BackupAppBackend:
         if "push items" in task:
             await self.push_items(dev)
         elif "request tables" in task:
-            await self.request_table(dev, "marks")
-            await self.request_table(dev, "users")
+            await self.send_cmd(dev, "send users")
+            await self.send_cmd(dev, "send marks")
             print("tables updated")
+        elif "reset marks" in task:
+            await self.send_cmd(dev, "reset marks")
+
+    async def send_cmd(self, dev, cmd):
+        stream = await self.tcp_comm.open_stream(dev)
+        if stream is None:
+            return
+        f_cmd = format_cmd(cmd)
+        await stream.send_all(f_cmd)
+
+        await self.tcp_comm.stream_handler(stream, dev)
 
     async def push_items(self, dev):
         stream = await self.tcp_comm.open_stream(dev)
@@ -57,16 +67,6 @@ class BackupAppBackend:
                 for chunk in iter(lambda: file.read(self.buffer_size), b""):
                     await stream.send_all(chunk)
         print(f"pushed items to {dev}")
-
-    async def request_table(self, dev, table):
-        stream = await self.tcp_comm.open_stream(dev)
-        if stream is None:
-            return
-        cmd = format_cmd(f"send {table}")
-        await stream.send_all(cmd)
-
-        await self.tcp_comm.stream_handler(stream, dev)
-        # TODO Logging
 
     async def run(self):
         async with trio.open_nursery() as nursery:
