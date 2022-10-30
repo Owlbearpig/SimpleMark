@@ -115,10 +115,9 @@ class DevTCPCommunication:
 
         cols = self.db_con.table_cols[table]
         for row in table_data:
-            print(row)
             # if row was deleted and table == marks then force update of the row in table with id == time
-            if str(row[6]):  # was deleted flag
-                self.db_con.insert_into(table, row, cols, row[0], commit_now=False)
+            if int(row[6]):  # was deleted flag
+                self.db_con.update_record(table, row, cols, row[0], commit_now=False)
             self.db_con.update_table(table, row, cols, commit_now=False)
         self.db_con.con.commit()
 
