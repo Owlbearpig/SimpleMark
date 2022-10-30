@@ -41,8 +41,8 @@ class NewUserLayout(GridLayout):
 class HiMark(App):
     def __init__(self, **kwargs):
         super(HiMark, self).__init__(**kwargs)
-        self.config = yaml.safe_load(open("config.yml"))
-        self.devices = [Device(name, addr) for name, addr in self.config["devices"].items()]
+        self.app_config = yaml.safe_load(open("config.yml"))
+        self.devices = [Device(name, addr) for name, addr in self.app_config["devices"].items()]
         self.selected_user = None
         self.qty_fields = {}
         self.sync_state = json.load(open(Path("Appdata") / "sync_state.json"))
@@ -260,7 +260,7 @@ class HiMark(App):
         row3 = GridLayout()
         row3.cols = 2
         self.ip_addr_field = TextInput(multiline=False, readonly=False, font_size=40, text="1", halign="left")
-        self.ip_addr_field.text = self.config["tcp_config"]["host_address"]
+        self.ip_addr_field.text = self.app_config["tcp_config"]["host_address"]
         row3.add_widget(self.ip_addr_field)
         update_ip_btn = Button(text="Update address")
         update_ip_btn.bind(on_press=self.on_button_press)
@@ -383,8 +383,8 @@ class HiMark(App):
         elif button_text == "update items":
             self.tcp_queue.append("update_items")
         elif button_text == "Update address":
-            self.config["tcp_config"]["host_address"] = self.ip_addr_field.text
-            yaml.dump(self.config, open("config.yml", "w"))
+            self.app_config["tcp_config"]["host_address"] = self.ip_addr_field.text
+            yaml.dump(self.app_config, open("config.yml", "w"))
         elif "time" in instance.ids.keys():
             self.remove_mark(instance)
 

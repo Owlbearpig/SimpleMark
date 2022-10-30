@@ -8,13 +8,13 @@ from custom_objects import Device
 class DevTCPCommunication:
     def __init__(self, db_con, port=None):
         self.db_con = db_con
-        self.config = yaml.safe_load(open("config.yml"))
-        self.devices = [Device(name, addr) for name, addr in self.config["devices"].items()]
-        self.host_addr = self.config["tcp_config"]["host_address"]
+        self.app_config = yaml.safe_load(open("config.yml"))
+        self.devices = [Device(name, addr) for name, addr in self.app_config["devices"].items()]
+        self.host_addr = self.app_config["tcp_config"]["host_address"]
         if port is None:
-            self.port = self.config["tcp_config"]["server_port"]
-        self.cmd_len = self.config["tcp_config"]["cmd_len"]
-        self.buffer_size = self.config["tcp_config"]["buffer_size"]
+            self.port = self.app_config["tcp_config"]["server_port"]
+        self.cmd_len = self.app_config["tcp_config"]["cmd_len"]
+        self.buffer_size = self.app_config["tcp_config"]["buffer_size"]
         self.received_items = False
         self.received_users = False
 
