@@ -3,8 +3,7 @@ import pickle
 import yaml
 from helpers import chunker, format_cmd
 from custom_objects import Device
-from kivy.logger import Logger
-
+from imports import Logger
 
 class DevTCPCommunication:
     def __init__(self, db_con, port=None):
@@ -20,12 +19,12 @@ class DevTCPCommunication:
         self.received_users = False
 
     async def open_stream(self, dev):
-        Logger.info(f"Connecting to {dev.addr} on port {self.port}...")
+        Logger.debug(f"Connecting to {dev.addr} on port {self.port}...")
         try:
             stream = await trio.open_tcp_stream(dev.addr, self.port)
-        except OSError as e:
-            Logger.exception(e, f"\nCould not connect to {dev.addr} on port {self.port}, trying again later")
-            stream = None
+        except OSError:
+            Logger.debug(f"Could not connect to {dev.addr} on port {self.port}, trying again later")
+            return None
 
         return stream
 
@@ -36,17 +35,17 @@ class DevTCPCommunication:
             try:
                 await trio.sleep(timeout)
                 listeners = (await trio.open_tcp_listeners(host=self.host_addr, port=self.port))
-                Logger.info(f"Listening on {self.host_addr};{self.port}")
+                Logger.debug(f"Listening on {self.host_addr};{self.port}")
                 for listener in listeners:
                     async with listener:
                         socket_stream, dev = await self.accept(listener)
                         if socket_stream is not None:
                             await self.stream_handler(socket_stream, dev)
                 retries, timeout = 0, 0
-            except Exception as e:
+            except Exception:
                 timeout += 30 * 2 ** retries
                 retries += 1
-                Logger.exception(e, f"\nWaiting {timeout} seconds until resuming, {retries} failed attempts.")
+                Logger.debug(f"Waiting {timeout} seconds until resuming, {retries} failed attempts.")
 
     async def accept(self, listener):
         # check if connection is from known device then reset timeouts
@@ -84,8 +83,8 @@ class DevTCPCommunication:
                 await self.receive_table(stream, "marks", dev)
             elif "receive users" in cmd:
                 await self.receive_table(stream, "users", dev)
-        except trio.ClosedResourceError as e:
-            Logger.exception(e)
+        except trio.ClosedResourceError:
+            Logger.debug("Incoming stream closed, returning")
 
     async def update_items(self, stream):
         chunk_s = ""
@@ -127,6 +126,8 @@ class DevTCPCommunication:
         try:
             if stream is None:
                 stream = await self.open_stream(dev)
+                if stream is None:
+                    return 1
 
             Logger.debug(f"Sending {table} to {dev}")
             cmd = format_cmd(f"receive {table}")
@@ -140,5 +141,5 @@ class DevTCPCommunication:
             Logger.debug(f"Successfully sent {table} to {dev}")
             return 0
         except Exception as e:
-            Logger.exception(e)
+            Logger.debug(str(e))
             return 1

@@ -1,6 +1,6 @@
 from pathlib import Path
 import sqlite3
-from kivy.logger import Logger
+from imports import Logger
 
 
 class DBConnection:

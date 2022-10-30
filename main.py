@@ -9,6 +9,7 @@ import yaml
 import json
 import glob
 
+
 class NewUserLayout(GridLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -180,7 +181,7 @@ class HiMark(App):
 
     def purchase_history_screen_layout(self):
         marks_table = self.db_con.select_from("marks")
-        all_marks = [{a:b for a, b in zip(self.db_con.table_cols["marks"], mark_tuple)} for mark_tuple in marks_table]
+        all_marks = [{a: b for a, b in zip(self.db_con.table_cols["marks"], mark_tuple)} for mark_tuple in marks_table]
 
         layout = GridLayout(cols=1, spacing=1, size_hint_y=None)
         layout.bind(minimum_height=layout.setter("height"))
@@ -202,7 +203,7 @@ class HiMark(App):
 
             layout.add_widget(line)
 
-        sv = ScrollView(size_hint=(1, None), size=(Window.width, Window.height-40))
+        sv = ScrollView(size_hint=(1, None), size=(Window.width, Window.height - 40))
         sv.add_widget(layout)
 
         return sv
@@ -226,7 +227,6 @@ class HiMark(App):
         self.update_users_screen()
 
         self.update_sync_state("users", False)
-
 
     def settings_screen(self):
         settings_screen = Screen(name="settings")
@@ -422,7 +422,6 @@ class HiMark(App):
         elif button_text == "Current log":
             self.refresh_log_screen()
             goto_log_window()
-
 
     def build(self):
         self.check_dir()
