@@ -183,17 +183,18 @@ class HiMark(App):
         marks_table = self.db_con.select_from("marks")
         all_marks = [{a: b for a, b in zip(self.db_con.table_cols["marks"], mark_tuple)} for mark_tuple in marks_table]
 
-        layout = GridLayout(cols=1, spacing=1, size_hint_y=None)
+        layout = GridLayout(cols=1, spacing=-40, size_hint_y=None)
         layout.bind(minimum_height=layout.setter("height"))
 
         for mark in all_marks:
-            if mark["was_deleted"] or (mark["user_id"] != self.selected_user.user_id):
+            if int(mark["was_deleted"]) or (mark["user_id"] != self.selected_user.user_id):
                 continue
 
             mark_vals = [str(val) for val in mark.values()]
             line = GridLayout(cols=2, spacing=1, size_hint_y=None)
-            mark_text = Label(text=" ".join(mark_vals), height=20, size_hint_y=None)
-            line.add_widget(mark_text)
+            mark_repr = " ".join((mark_vals[0][0:-7], mark_vals[1], mark_vals[2]))
+            line_text = Label(text=mark_repr, font_size=20, height=40, size_hint_y=None)
+            line.add_widget(line_text)
 
             remove_mark_btn = Button(text="Remove", height=40, size_hint_y=None, size_hint_x=None)
             remove_mark_btn.bind(on_press=self.on_button_press)
