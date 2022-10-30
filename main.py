@@ -261,7 +261,7 @@ class HiMark(App):
 
         row4 = GridLayout()
         row4.cols = 1
-        goto_logs_btn = Button(text="Current log")
+        goto_logs_btn = Button(text="Current log", font_size=55)
         goto_logs_btn.bind(on_press=self.on_button_press)
         row4.add_widget(goto_logs_btn)
 
@@ -289,7 +289,7 @@ class HiMark(App):
 
         log_files_dir = Path("logs")
         log_glob = log_files_dir.glob("**/*.txt")
-        most_recent_log_file = max(log_glob, key=os.path.getctime)
+        most_recent_log_file = max(log_glob, key=os.path.getmtime)
 
         with open(most_recent_log_file, "r") as f:
             for line in f.readlines():
@@ -509,6 +509,7 @@ class HiMark(App):
         if (not synced_users) or (not synced_marks):
             dev.timeout = interval * 2 ** dev.timeouts
             dev.timeouts += 1
+            Logger.debug(f"Could not sync {dev}, retry in {dev.timeout} seconds ({dev.timeouts} attempts)")
         else:
             dev.timeouts = 0
             self.sync_state["marks"][dev.name] = synced_marks

@@ -39,7 +39,7 @@ class DBConnection:
         try:
             self.cur.execute(f"CREATE TABLE {table}{cols}")
         except sqlite3.OperationalError as e:
-            Logger.exception(e)
+            Logger.exception(repr(e))
 
     def update_record(self, table, new_values, cols, id_val, commit_now=True):
         if isinstance(cols, tuple):

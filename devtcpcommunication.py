@@ -5,6 +5,7 @@ from helpers import chunker, format_cmd
 from custom_objects import Device
 from imports import Logger
 
+
 class DevTCPCommunication:
     def __init__(self, db_con, port=None):
         self.db_con = db_con
@@ -23,7 +24,7 @@ class DevTCPCommunication:
         try:
             stream = await trio.open_tcp_stream(dev.addr, self.port)
         except OSError:
-            Logger.debug(f"Could not connect to {dev.addr} on port {self.port}, trying again later")
+            Logger.debug(f"Could not open tcp stream to {dev.addr} on port {self.port}")
             return None
 
         return stream
@@ -42,12 +43,12 @@ class DevTCPCommunication:
                         if socket_stream is not None:
                             await self.stream_handler(socket_stream, dev)
                 retries, timeout = 0, 0
-            except Exception as e:
+            except OSError as e:
                 timeout += 30 * 2 ** retries
                 retries += 1
-                #Logger.debug(repr(e))
-                print(e)
-                Logger.debug(f"Waiting {timeout} seconds until resuming, {retries} failed attempts.")
+                Logger.debug(repr(e))
+                Logger.debug(f"Check IP settings.")
+                Logger.debug(f"Waiting {timeout} seconds until resuming listening, {retries} failed attempts.")
 
     async def accept(self, listener):
         # check if connection is from known device then reset timeouts
@@ -71,8 +72,8 @@ class DevTCPCommunication:
 
     async def stream_handler(self, stream, dev):
         cmd_bytes = await stream.receive_some(self.cmd_len)
-        cmd = cmd_bytes.decode()
-        Logger.debug("Incoming cmd:", cmd.replace("0", ""))
+        cmd = cmd_bytes.decode().replace("0", "")
+        Logger.debug(f"Incoming cmd: {cmd}")
 
         try:
             if "push items" in cmd:
@@ -116,7 +117,7 @@ class DevTCPCommunication:
         for row in table_data:
             print(row)
             # if row was deleted and table == marks then force update of the row in table with id == time
-            if eval(str(row[6])):  # was deleted flag
+            if str(row[6]):  # was deleted flag
                 self.db_con.insert_into(table, row, cols, row[0], commit_now=False)
             self.db_con.update_table(table, row, cols, commit_now=False)
         self.db_con.con.commit()
@@ -129,7 +130,7 @@ class DevTCPCommunication:
             if stream is None:
                 stream = await self.open_stream(dev)
                 if stream is None:
-                    return 1
+                    raise Exception(f"Could not open stream to {dev}")
 
             Logger.debug(f"Sending {table} to {dev}")
             cmd = format_cmd(f"receive {table}")
@@ -143,5 +144,5 @@ class DevTCPCommunication:
             Logger.debug(f"Successfully sent {table} to {dev}")
             return 0
         except Exception as e:
-            Logger.debug(str(e))
+            Logger.debug(repr(e))
             return 1
