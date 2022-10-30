@@ -52,6 +52,8 @@ class BackupAppBackend:
             return
         f_cmd = format_cmd(cmd)
         await stream.send_all(f_cmd)
+        if "reset marks" in cmd:
+            await stream.aclose()
 
         await self.tcp_comm.stream_handler(stream, dev)
 
