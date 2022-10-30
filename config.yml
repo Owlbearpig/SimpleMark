@@ -1,0 +1,10 @@
+tcp_config:
+  buffer_size: 4096
+  cmd_len: 64
+  host_address: 192.168.52.6
+  server_port: 12345
+
+devices:
+  backup: 192.168.52.6
+  dev1: 192.168.52.9
+  dev2: 192.168.52.10

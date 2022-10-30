@@ -10,11 +10,12 @@ from kivy.uix.scrollview import ScrollView
 from kivy.core.window import Window
 from datetime import datetime
 from dbconnection import DBConnection
-from tcpcommunication import TCPCommunication
+from devtcpcommunication import DevTCPCommunication
 from pathlib import Path
 from custom_objects import User, Item, Device
 import trio
 import yaml
+import json
 
 
 class NewUserLayout(GridLayout):
@@ -40,18 +41,16 @@ class NewUserLayout(GridLayout):
 class HiMark(App):
     def __init__(self, **kwargs):
         super(HiMark, self).__init__(**kwargs)
-        self.tcp_config = yaml.safe_load(open("config.yml"))
-
-        self.devices = [Device("192.168.52.6", "backup", self.tcp_config),
-                        Device("192.168.52.9", "dev1", self.tcp_config),
-                        Device("192.168.52.10", "dev2", self.tcp_config)]
-
+        self.config = yaml.safe_load(open("config.yml"))
+        self.devices = [Device(name, addr) for name, addr in self.config["devices"].items()]
         self.selected_user = None
         self.qty_fields = {}
+        self.sync_state = json.load(open(Path("Appdata") / "sync_state.json"))
+
         # text to be displayed on users screen
         self.current_status = ""
         self.db_con = DBConnection()
-        self.tcp_comm = TCPCommunication(self.db_con, self.devices)
+        self.tcp_comm = DevTCPCommunication(self.db_con)
         self.tcp_queue = []
 
     def check_dir(self):
@@ -190,18 +189,18 @@ class HiMark(App):
 
     def purchase_history_screen_layout(self):
         marks_table = self.db_con.select_from("marks")
-        marks = [{a:b for a, b in zip(self.db_con.table_cols["marks"], mark_tuple)} for mark_tuple in marks_table]
-        cur_user_marks = [mark for mark in marks if mark["user_id"] == self.selected_user.user_id]
-        layout = GridLayout(cols=1, spacing=10, size_hint_y=None)
+        all_marks = [{a:b for a, b in zip(self.db_con.table_cols["marks"], mark_tuple)} for mark_tuple in marks_table]
+
+        layout = GridLayout(cols=1, spacing=1, size_hint_y=None)
         layout.bind(minimum_height=layout.setter("height"))
 
-        for mark in cur_user_marks:
-            if mark["was_deleted"]:
+        for mark in all_marks:
+            if mark["was_deleted"] or (mark["user_id"] != self.selected_user.user_id):
                 continue
 
             mark_vals = [str(val) for val in mark.values()]
             line = GridLayout(cols=2, spacing=1, size_hint_y=None)
-            mark_text = Label(text=" ".join(mark_vals), height=40, size_hint_y=None)
+            mark_text = Label(text=" ".join(mark_vals), height=20, size_hint_y=None)
             line.add_widget(mark_text)
 
             remove_mark_btn = Button(text="Remove", height=40, size_hint_y=None, size_hint_x=None)
@@ -212,11 +211,18 @@ class HiMark(App):
 
             layout.add_widget(line)
 
-        sv = ScrollView(size_hint=(1, None), size=(Window.width, Window.height))
+        sv = ScrollView(size_hint=(1, None), size=(Window.width, Window.height-40))
         sv.add_widget(layout)
 
-        # TODO add back button, integrate with sync. Sync flag?
         return sv
+
+    def update_sync_state(self, table, state):
+        for dev in self.devices:
+            if dev.is_host:
+                continue
+            else:
+                self.sync_state[table][dev.name] = state
+                json.dump(self.sync_state, open(Path("Appdata") / "sync_state.json", "w"))
 
     def on_create_user(self):
         username = self.new_user_layout.username_input.text
@@ -228,11 +234,8 @@ class HiMark(App):
         self.users_screen.clear_widgets()
         self.update_users_screen()
 
-        for dev in self.devices:
-            if dev.is_host:
-                continue
-            else:
-                dev.synced_users = False
+        self.update_sync_state("users", False)
+
 
     def settings_screen(self):
         settings_screen = Screen(name="settings")
@@ -257,7 +260,7 @@ class HiMark(App):
         row3 = GridLayout()
         row3.cols = 2
         self.ip_addr_field = TextInput(multiline=False, readonly=False, font_size=40, text="1", halign="left")
-        self.ip_addr_field.text = self.tcp_config["host_address"]
+        self.ip_addr_field.text = self.config["tcp_config"]["host_address"]
         row3.add_widget(self.ip_addr_field)
         update_ip_btn = Button(text="Update address")
         update_ip_btn.bind(on_press=self.on_button_press)
@@ -291,7 +294,7 @@ class HiMark(App):
                 cols = self.db_con.table_cols["marks"]
                 self.db_con.insert_into("marks", vals, cols)
 
-                self.status_field.text = f"Added {qty}x {item.name} to\n {user.username}"
+                self.status_field.text = f"Added {qty}x {item.name} to {user.username}"
 
                 entry = "__".join([now, qty, item.name, price, item_id, user_id])
                 break
@@ -299,26 +302,32 @@ class HiMark(App):
         with open(f"Appdata/Marks/{int(user_id)}", "a") as file:
             file.write(entry + "\n")
 
-        for dev in self.devices:
-            if dev.is_host:
-                continue
-            else:
-                dev.synced_marks = False
+        self.update_sync_state("marks", False)
 
     def remove_mark(self, instance):
         mark_time = instance.ids["time"]
         self.db_con.update_record("marks", "1", "was_deleted", mark_time)
+        self.update_sync_state("marks", False)
         self.on_purchase_history()
 
     def on_category_select(self):
         if self.tcp_comm.received_items:
-            self.tcp_comm.received_items = False
             self.update_store_screen()
+            self.tcp_comm.received_items = False
 
     def on_purchase_history(self):
         self.purchase_history_screen.clear_widgets()
-        layout = self.purchase_history_screen_layout()
-        self.purchase_history_screen.add_widget(layout)
+
+        grd_layout = GridLayout(rows=2, row_default_height=40)
+
+        back_btn = Button(text="Go back", size_hint_y=40)
+        back_btn.bind(on_press=self.on_button_press)
+        grd_layout.add_widget(back_btn)
+
+        sv_layout = self.purchase_history_screen_layout()
+        grd_layout.add_widget(sv_layout)
+
+        self.purchase_history_screen.add_widget(grd_layout)
 
     def on_button_press(self, instance):
         def goto_main():
@@ -374,10 +383,11 @@ class HiMark(App):
         elif button_text == "update items":
             self.tcp_queue.append("update_items")
         elif button_text == "Update address":
-            self.tcp_config["host_address"] = self.ip_addr_field.text
-            yaml.dump(self.tcp_config, open("config.yml", "w"))
+            self.config["tcp_config"]["host_address"] = self.ip_addr_field.text
+            yaml.dump(self.config, open("config.yml", "w"))
         elif "time" in instance.ids.keys():
             self.remove_mark(instance)
+
 
     def build(self):
         self.check_dir()
@@ -449,19 +459,22 @@ class HiMark(App):
         if dev.timeout:
             dev.timeout -= interval
             return
-        stream = None
-        if not dev.synced_marks:
-            ret = await self.tcp_comm.send_table(stream, "marks", dev)
-            dev.synced_marks = not bool(ret)
-        if not dev.synced_users:
-            ret = await self.tcp_comm.send_table(stream, "users", dev)
-            dev.synced_users = not bool(ret)
+        synced_marks, synced_users = self.sync_state["marks"][dev.name], self.sync_state["users"][dev.name]
+        if not synced_marks:
+            ret = await self.tcp_comm.send_table(None, "marks", dev)
+            synced_marks = not bool(ret)
+        if not synced_users:
+            ret = await self.tcp_comm.send_table(None, "users", dev)
+            synced_users = not bool(ret)
 
-        if (not dev.synced_users) or (not dev.synced_marks):
+        if (not synced_users) or (not synced_marks):
             dev.timeout = interval * 2 ** dev.timeouts
             dev.timeouts += 1
         else:
             dev.timeouts = 0
+            self.sync_state["marks"][dev.name] = synced_marks
+            self.sync_state["users"][dev.name] = synced_users
+            json.dump(self.sync_state, open(Path("Appdata") / "sync_state.json", "w"))
 
 
 if __name__ == '__main__':

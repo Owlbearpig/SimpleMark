@@ -1,12 +1,12 @@
+import yaml
 
 
 class Device:
-    def __init__(self, addr, name, config):
-        self.addr = addr
+    def __init__(self, name, addr):
         self.name = name
-        self.synced_marks = True
-        self.synced_users = True
-        self.is_host = addr == config["host_address"]
+        self.addr = addr
+        self.config = yaml.safe_load(open("config.yml"))
+        self.is_host = (addr == self.config["tcp_config"]["host_address"])
         self.timeout = 0
         self.timeouts = 0
 

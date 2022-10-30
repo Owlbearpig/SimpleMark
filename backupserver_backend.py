@@ -1,6 +1,6 @@
 import trio
 from dbconnection import DBConnection
-from tcpcommunication import TCPCommunication
+from tcpcommunication import DevTCPCommunication
 from custom_objects import Device
 import pickle
 import yaml
@@ -21,7 +21,7 @@ class BackupAppBackend:
         self.cmd_len = self.config["cmd_len"]
 
         self.db_con = DBConnection("storage.db")
-        self.tcp_comm = TCPCommunication(self.db_con, self.devices)
+        self.tcp_comm = DevTCPCommunication(self.db_con, self.devices)
 
         self.tasks = []
 

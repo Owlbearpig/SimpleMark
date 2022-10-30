@@ -2,18 +2,19 @@ import trio
 import pickle
 import yaml
 from helpers import chunker, format_cmd
+from custom_objects import Device
 
 
-class TCPCommunication:
-    def __init__(self, db_con, devices, port=None):
+class DevTCPCommunication:
+    def __init__(self, db_con, port=None):
         self.db_con = db_con
-        self.devices = devices
         self.config = yaml.safe_load(open("config.yml"))
-        self.host_addr = self.config["host_address"]
+        self.devices = [Device(name, addr) for name, addr in self.config["devices"].items()]
+        self.host_addr = self.config["tcp_config"]["host_address"]
         if port is None:
-            self.port = self.config["server_port"]
-        self.cmd_len = self.config["cmd_len"]
-        self.buffer_size = self.config["buffer_size"]
+            self.port = self.config["tcp_config"]["server_port"]
+        self.cmd_len = self.config["tcp_config"]["cmd_len"]
+        self.buffer_size = self.config["tcp_config"]["buffer_size"]
         self.received_items = False
         self.received_users = False
 
@@ -41,9 +42,9 @@ class TCPCommunication:
                             await self.stream_handler(socket_stream, dev)
                 retries, timeout = 0, 0
             except Exception as e:
-                print(e)
-                timeout += 30*2**retries
+                timeout += 30 * 2 ** retries
                 retries += 1
+                print(e, f"Waiting {timeout} seconds until resuming, {retries} failed attempts.", sep="\n")
 
     async def accept(self, listener):
         # check if connection is from known device then reset timeouts
@@ -57,6 +58,7 @@ class TCPCommunication:
                 connected_dev = dev
                 dev.reset_timeout()
                 break
+
         if connected_dev is not None:
             print(f"Accepted {connected_dev}")
             return stream, connected_dev
@@ -109,6 +111,10 @@ class TCPCommunication:
 
         cols = self.db_con.table_cols[table]
         for row in table_data:
+            print(row)
+            # if row was deleted and table == marks then force update of the row in table with id == time
+            if eval(row[6]):  # was deleted flag
+                self.db_con.insert_into(table, row, cols, row[0], commit_now=False)
             self.db_con.update_table(table, row, cols, commit_now=False)
         self.db_con.con.commit()
 

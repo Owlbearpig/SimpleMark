@@ -40,14 +40,18 @@ class DBConnection:
         except sqlite3.OperationalError as e:
             print(e)
 
-    def update_record(self, table, new_value, col, id_val):
+    def update_record(self, table, new_values, cols, id_val, commit_now=True):
+        if not isinstance(cols, tuple):
+            cols = (cols,)
         id_expr = ""
         if table == "marks":
             id_expr = f"time = '{id_val}'"
-        sql = f"UPDATE {table} SET {col} = ? WHERE {id_expr}"
+        parameters = ", ".join(["?"] * len(cols))
+        sql = f"UPDATE {table} SET {cols} = {parameters} WHERE {id_expr}"
 
-        self.cur.execute(sql, new_value)
-        self.con.commit()
+        self.cur.execute(sql, new_values)
+        if commit_now:
+            self.con.commit()
 
     def update_table(self, table, values, cols, commit_now=True):
         id_expr = ""
