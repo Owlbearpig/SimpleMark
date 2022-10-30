@@ -1,13 +1,4 @@
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.textinput import TextInput
-from kivy.app import App
-from kivy.uix.checkbox import CheckBox
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.label import Label
-from kivy.uix.scrollview import ScrollView
-from kivy.core.window import Window
+from imports import *
 from datetime import datetime
 from dbconnection import DBConnection
 from devtcpcommunication import DevTCPCommunication
@@ -16,7 +7,7 @@ from custom_objects import User, Item, Device
 import trio
 import yaml
 import json
-
+import glob
 
 class NewUserLayout(GridLayout):
     def __init__(self, **kwargs):
@@ -268,6 +259,14 @@ class HiMark(App):
 
         v_layout.add_widget(row3)
 
+        row4 = GridLayout()
+        row4.cols = 1
+        goto_logs_btn = Button(text="Current log")
+        goto_logs_btn.bind(on_press=self.on_button_press)
+        row4.add_widget(goto_logs_btn)
+
+        v_layout.add_widget(row4)
+
         go_back_btn = Button(text="Go back", font_size=55)
         go_back_btn.bind(on_press=self.on_button_press)
         v_layout.add_widget(go_back_btn)
@@ -275,6 +274,35 @@ class HiMark(App):
         settings_screen.add_widget(v_layout)
 
         return settings_screen
+
+    def refresh_log_screen(self):
+        self.log_screen.clear_widgets()
+
+        grd_layout = GridLayout(rows=2, row_default_height=40)
+
+        back_btn = Button(text="Go back", size_hint_y=40)
+        back_btn.bind(on_press=self.on_button_press)
+        grd_layout.add_widget(back_btn)
+
+        layout = GridLayout(cols=1, spacing=1, size_hint_y=None)
+        layout.bind(minimum_height=layout.setter("height"))
+
+        log_files_dir = Path("logs")
+        log_glob = log_files_dir.glob("**/*.txt")
+        most_recent_log_file = max(log_glob, key=os.path.getctime)
+
+        with open(most_recent_log_file, "r") as f:
+            for line in f.readlines():
+                row = Label(text=line, height=40, size_hint_y=None)
+
+                layout.add_widget(row)
+
+        log_sv = ScrollView(size_hint=(1, None), size=(Window.width, Window.height - 40))
+        log_sv.add_widget(layout)
+
+        grd_layout.add_widget(log_sv)
+
+        self.log_screen.add_widget(grd_layout)
 
     def select_user(self, selected_user_id):
         for user in self.users:
@@ -354,6 +382,10 @@ class HiMark(App):
             self.sm.transition.direction = "down"
             self.sm.current = "purchase_history"
 
+        def goto_log_window():
+            self.sm.transition.direction = "right"
+            self.sm.current = "log_window"
+
         button_text = instance.text
         if button_text == "Add user":
             if self.status_field.text == "1234":
@@ -387,6 +419,9 @@ class HiMark(App):
             yaml.dump(self.app_config, open("config.yml", "w"))
         elif "time" in instance.ids.keys():
             self.remove_mark(instance)
+        elif button_text == "Current log":
+            self.refresh_log_screen()
+            goto_log_window()
 
 
     def build(self):
@@ -415,6 +450,10 @@ class HiMark(App):
         settings_screen = self.settings_screen()
         self.sm.add_widget(settings_screen)
 
+        # setup logging screen
+        self.log_screen = Screen(name="log_window")
+        self.sm.add_widget(self.log_screen)
+
         # setup categories
         category_screen = self.item_category_screen()
         self.sm.add_widget(category_screen)
@@ -439,7 +478,7 @@ class HiMark(App):
             async def run_wrapper():
                 # trio needs to be set so that it'll be used for the event loop
                 await self.async_run(async_lib='trio')
-                print('App done')
+                Logger.info("App done")
                 nursery.cancel_scope.cancel()
 
             nursery.start_soon(run_wrapper)
@@ -459,6 +498,7 @@ class HiMark(App):
         if dev.timeout:
             dev.timeout -= interval
             return
+
         synced_marks, synced_users = self.sync_state["marks"][dev.name], self.sync_state["users"][dev.name]
         if not synced_marks:
             ret = await self.tcp_comm.send_table(None, "marks", dev)

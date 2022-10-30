@@ -1,5 +1,6 @@
 from pathlib import Path
 import sqlite3
+from kivy.logger import Logger
 
 
 class DBConnection:
@@ -38,7 +39,7 @@ class DBConnection:
         try:
             self.cur.execute(f"CREATE TABLE {table}{cols}")
         except sqlite3.OperationalError as e:
-            print(e)
+            Logger.exception(e)
 
     def update_record(self, table, new_values, cols, id_val, commit_now=True):
         if isinstance(cols, tuple):

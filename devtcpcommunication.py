@@ -3,6 +3,7 @@ import pickle
 import yaml
 from helpers import chunker, format_cmd
 from custom_objects import Device
+from kivy.logger import Logger
 
 
 class DevTCPCommunication:
@@ -19,10 +20,11 @@ class DevTCPCommunication:
         self.received_users = False
 
     async def open_stream(self, dev):
+        Logger.info(f"Connecting to {dev.addr} on port {self.port}...")
         try:
             stream = await trio.open_tcp_stream(dev.addr, self.port)
         except OSError as e:
-            print("ehm no connection...\n", e)
+            Logger.exception(e, f"\nCould not connect to {dev.addr} on port {self.port}, trying again later")
             stream = None
 
         return stream
@@ -34,7 +36,7 @@ class DevTCPCommunication:
             try:
                 await trio.sleep(timeout)
                 listeners = (await trio.open_tcp_listeners(host=self.host_addr, port=self.port))
-                print(f"Listening on {self.host_addr}:{self.port}")
+                Logger.info(f"Listening on {self.host_addr};{self.port}")
                 for listener in listeners:
                     async with listener:
                         socket_stream, dev = await self.accept(listener)
@@ -44,14 +46,14 @@ class DevTCPCommunication:
             except Exception as e:
                 timeout += 30 * 2 ** retries
                 retries += 1
-                print(e, f"Waiting {timeout} seconds until resuming, {retries} failed attempts.", sep="\n")
+                Logger.exception(e, f"\nWaiting {timeout} seconds until resuming, {retries} failed attempts.")
 
     async def accept(self, listener):
         # check if connection is from known device then reset timeouts
         stream = await listener.accept()
         addr, port = stream.socket.getpeername()
 
-        print(f"{addr}:{port} connected")
+        Logger.debug(f"{addr};{port} connected")
         connected_dev = None
         for dev in self.devices:
             if dev.addr == addr:
@@ -60,7 +62,7 @@ class DevTCPCommunication:
                 break
 
         if connected_dev is not None:
-            print(f"Accepted {connected_dev}")
+            Logger.debug(f"Accepted {connected_dev}")
             return stream, connected_dev
         else:
             await stream.aclose()
@@ -69,7 +71,7 @@ class DevTCPCommunication:
     async def stream_handler(self, stream, dev):
         cmd_bytes = await stream.receive_some(self.cmd_len)
         cmd = cmd_bytes.decode()
-        print("Incoming cmd:", cmd.replace("0", ""))
+        Logger.debug("Incoming cmd:", cmd.replace("0", ""))
 
         try:
             if "push items" in cmd:
@@ -83,7 +85,7 @@ class DevTCPCommunication:
             elif "receive users" in cmd:
                 await self.receive_table(stream, "users", dev)
         except trio.ClosedResourceError as e:
-            print(e)
+            Logger.exception(e)
 
     async def update_items(self, stream):
         chunk_s = ""
@@ -98,10 +100,10 @@ class DevTCPCommunication:
             if len(values) == 4:
                 self.db_con.insert_into("items", values, cols)
         self.received_items = True
-        print("received new items")
+        Logger.debug("Received new items")
 
     async def receive_table(self, stream, table, dev):
-        print(f"Receiving {table} from {dev}")
+        Logger.debug(f"Receiving {table} from {dev}")
         async with stream:
             received_data = b""
             async for chunk in stream:
@@ -113,7 +115,7 @@ class DevTCPCommunication:
         for row in table_data:
             print(row)
             # if row was deleted and table == marks then force update of the row in table with id == time
-            if eval(row[6]):  # was deleted flag
+            if eval(str(row[6])):  # was deleted flag
                 self.db_con.insert_into(table, row, cols, row[0], commit_now=False)
             self.db_con.update_table(table, row, cols, commit_now=False)
         self.db_con.con.commit()
@@ -126,7 +128,7 @@ class DevTCPCommunication:
             if stream is None:
                 stream = await self.open_stream(dev)
 
-            print(f"Sending {table} to {dev}")
+            Logger.debug(f"Sending {table} to {dev}")
             cmd = format_cmd(f"receive {table}")
             await stream.send_all(cmd)
 
@@ -135,8 +137,8 @@ class DevTCPCommunication:
                 data = pickle.dumps(entries)
                 for chunk in chunker(data, self.buffer_size):
                     await stream.send_all(chunk)
-            print(f"Successfully sent {table} to {dev}")
+            Logger.debug(f"Successfully sent {table} to {dev}")
             return 0
         except Exception as e:
-            print(e)
+            Logger.exception(e)
             return 1
