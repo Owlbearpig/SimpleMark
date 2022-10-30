@@ -50,8 +50,8 @@ class DBConnection:
         if table == "marks":
             id_expr = f"time = '{id_val}'"
 
-        sql = f"UPDATE {table} SET {cols} = {parameters} WHERE {id_expr}"
-
+        sql = f"UPDATE {table} SET {cols} = ({parameters}) WHERE {id_expr}"
+        print(sql)
         self.cur.execute(sql, new_values)
         if commit_now:
             self.con.commit()

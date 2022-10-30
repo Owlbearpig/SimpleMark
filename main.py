@@ -509,7 +509,7 @@ class HiMark(App):
         if (not synced_users) or (not synced_marks):
             dev.timeout = interval * 2 ** dev.timeouts
             dev.timeouts += 1
-            Logger.debug(f"Could not sync {dev}, retry in {dev.timeout} seconds ({dev.timeouts} attempts)")
+            Logger.debug(f"Could not sync {dev}, retrying in {dev.timeout} seconds ({dev.timeouts} attempts)")
         else:
             dev.timeouts = 0
             self.sync_state["marks"][dev.name] = synced_marks
