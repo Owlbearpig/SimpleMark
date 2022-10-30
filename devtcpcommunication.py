@@ -42,9 +42,10 @@ class DevTCPCommunication:
                         if socket_stream is not None:
                             await self.stream_handler(socket_stream, dev)
                 retries, timeout = 0, 0
-            except Exception:
+            except Exception as e:
                 timeout += 30 * 2 ** retries
                 retries += 1
+                Logger.debug(repr(e))
                 Logger.debug(f"Waiting {timeout} seconds until resuming, {retries} failed attempts.")
 
     async def accept(self, listener):
