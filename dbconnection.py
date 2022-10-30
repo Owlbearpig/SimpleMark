@@ -41,12 +41,14 @@ class DBConnection:
             print(e)
 
     def update_record(self, table, new_values, cols, id_val, commit_now=True):
-        if not isinstance(cols, tuple):
-            cols = (cols,)
+        if isinstance(cols, tuple):
+            parameters = ", ".join(["?"] * len(cols))
+        else:
+            parameters = "?"
         id_expr = ""
         if table == "marks":
             id_expr = f"time = '{id_val}'"
-        parameters = ", ".join(["?"] * len(cols))
+
         sql = f"UPDATE {table} SET {cols} = {parameters} WHERE {id_expr}"
 
         self.cur.execute(sql, new_values)
