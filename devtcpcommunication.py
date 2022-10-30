@@ -45,7 +45,8 @@ class DevTCPCommunication:
             except Exception as e:
                 timeout += 30 * 2 ** retries
                 retries += 1
-                Logger.debug(repr(e))
+                #Logger.debug(repr(e))
+                print(e)
                 Logger.debug(f"Waiting {timeout} seconds until resuming, {retries} failed attempts.")
 
     async def accept(self, listener):
